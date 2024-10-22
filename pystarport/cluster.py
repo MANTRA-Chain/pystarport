@@ -1005,6 +1005,8 @@ def init_devnet(
                 "commission_rate",
                 "details",
                 "security_contact",
+                "identity",
+                "website",
                 "gas_prices",
             ]
             extra_kwargs = {
