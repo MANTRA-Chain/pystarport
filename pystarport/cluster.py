@@ -1351,6 +1351,20 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
             command=f"{cmd} start --home . {start_flags}",
             stdout_logfile=f"{directory}.log",
         )
+
+        oracle_config = node["app-config"].get("oracle", {})
+        if oracle_config.get("enabled"):
+            oracle_port = ports.oracle_port(node["base_port"])
+            grpc_address = node["app-config"].get("grpc", {}).get("address", "")
+            grpc_port = grpc_address.split(":")[1] if ":" in grpc_address else ports.grpc_port(node["base_port"])
+            oracle_section = f"program:{chain_id}-node{i}-oracle"
+            ini[oracle_section] = dict(
+                COMMON_PROG_OPTIONS,
+                directory=directory,
+                command=f"connect --market-map-endpoint=localhost:{grpc_port} --port {oracle_port}",
+                stdout_logfile=f"{directory}-oracle.log",
+            )
+
     return ini
 
 
@@ -1451,6 +1465,10 @@ def edit_app_cfg(path, base_port, app_config):
         },
         "grpc": {
             "address": "127.0.0.1:%d" % ports.grpc_port(base_port),
+        },
+        "oracle": {
+            "enabled": False,
+            "oracle_address": "127.0.0.1:%d" % ports.oracle_port(base_port),
         },
         "pruning": "nothing",
         "state-sync": {

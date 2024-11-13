@@ -32,3 +32,7 @@ def rpc_port(base_port):
 
 def grpc_web_port(base_port):
     return base_port + 8
+
+
+def oracle_port(base_port):
+    return base_port + 9
