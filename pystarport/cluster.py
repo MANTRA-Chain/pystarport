@@ -1351,11 +1351,13 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
             command=f"{cmd} start --home . {start_flags}",
             stdout_logfile=f"{directory}.log",
         )
-
-        oracle_config = node["app-config"].get("oracle", {})
+        app_cfg = node.get("app-config", {})
+        if not app_cfg:
+            continue
+        oracle_config = app_cfg.get("oracle", {})
         if oracle_config.get("enabled"):
             oracle_port = ports.oracle_port(node["base_port"])
-            grpc_address = node["app-config"].get("grpc", {}).get("address", "")
+            grpc_address = app_cfg.get("grpc", {}).get("address", "")
             grpc_port = grpc_address.split(":")[1] if ":" in grpc_address else ports.grpc_port(node["base_port"])
             oracle_section = f"program:{chain_id}-node{i}-oracle"
             ini[oracle_section] = dict(
