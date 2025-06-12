@@ -186,6 +186,7 @@ class ClusterCLI:
         statesync=False,
         mnemonic=None,
         broadcastmode="sync",
+        coin_type=None,
     ):
         """create new node in the data directory,
         process information is written into supervisor config
@@ -257,7 +258,7 @@ class ClusterCLI:
         edit_app_cfg(home / "config/app.toml", base_port, {})
 
         # create validator account
-        self.create_account("validator", i, mnemonic)
+        self.create_account("validator", i, mnemonic, coin_type=coin_type)
 
         # add process config into supervisor
         path = self.data_dir / SUPERVISOR_CONFIG_FILE
@@ -311,13 +312,13 @@ class ClusterCLI:
         "delete account in i-th node's keyring"
         return self.cosmos_cli(i).delete_account(name)
 
-    def create_account(self, name, i=0, mnemonic=None):
+    def create_account(self, name, i=0, mnemonic=None, **kwargs):
         "create new keypair in i-th node's keyring"
-        return self.cosmos_cli(i).create_account(name, mnemonic)
+        return self.cosmos_cli(i).create_account(name, mnemonic, **kwargs)
 
-    def create_account_ledger(self, name, i=0):
+    def create_account_ledger(self, name, i=0, **kwargs):
         "create new ledger keypair"
-        return self.cosmos_cli(i).create_account_ledger(name)
+        return self.cosmos_cli(i).create_account_ledger(name, **kwargs)
 
     def init(self, i):
         "the i-th node's config is already added"
@@ -368,8 +369,8 @@ class ClusterCLI:
     def distribution_commission(self, addr, i=0):
         return self.cosmos_cli(i).distribution_commission(addr)
 
-    def distribution_community(self, i=0):
-        return self.cosmos_cli(i).distribution_community()
+    def distribution_community(self, i=0, **kwargs):
+        return self.cosmos_cli(i).distribution_community(**kwargs)
 
     def distribution_reward(self, delegator_addr, i=0):
         return self.cosmos_cli(i).distribution_reward(delegator_addr)
@@ -510,8 +511,8 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def make_multisig(self, name, signer1, signer2, i=0):
-        return self.cosmos_cli(i).make_multisig(name, signer1, signer2)
+    def make_multisig(self, name, signer1, signer2, i=0, **kwargs):
+        return self.cosmos_cli(i).make_multisig(name, signer1, signer2, **kwargs)
 
     def sign_multisig_tx(self, tx_file, multi_addr, signer_name, i=0, **kwargs):
         return self.cosmos_cli(i).sign_multisig_tx(
@@ -834,6 +835,9 @@ class ClusterCLI:
     def ibc_denom_trace(self, path, node, i=0):
         return self.cosmos_cli(i).ibc_denom_trace(path, node)
 
+    def ibc_denom(self, path, node, i=0):
+        return self.cosmos_cli(i).ibc_denom(path, node)
+
 
 def start_cluster(data_dir):
     cmd = [
@@ -900,14 +904,17 @@ def init_devnet(
     """
 
     def create_account(cli, account, use_ledger=False):
+        coin_type = account.get("coin-type")
         if use_ledger:
-            acct = cli.create_account_ledger(account["name"])
+            acct = cli.create_account_ledger(account["name"], coin_type=coin_type)
         elif account.get("address"):
             # if address field exists, will use account with that address directly
             acct = {"name": account.get("name"), "address": account.get("address")}
         else:
             mnemonic = account.get("mnemonic")
-            acct = cli.create_account(account["name"], mnemonic=mnemonic)
+            acct = cli.create_account(
+                account["name"], mnemonic=mnemonic, coin_type=coin_type
+            )
             if mnemonic:
                 acct["mnemonic"] = mnemonic
         vesting = account.get("vesting")
@@ -1013,7 +1020,10 @@ def init_devnet(
     accounts = []
     for i, node in enumerate(config["validators"]):
         mnemonic = node.get("mnemonic")
-        account = cli.create_account("validator", i, mnemonic=mnemonic)
+        coin_type = node.get("coin-type")
+        account = cli.create_account(
+            "validator", i, mnemonic=mnemonic, coin_type=coin_type
+        )
         if mnemonic:
             account["mnemonic"] = mnemonic
         accounts.append(account)
@@ -1241,7 +1251,14 @@ def init_cluster(
         cfg["chain_id"] = chain_id
 
     chains = list(config.values())
-    for chain in chains:
+
+    # for multiple chains, there can be multiple cmds splited by `,`
+    if cmd is not None:
+        cmds = cmd.split(",")
+    else:
+        cmds = [None] * len(chains)
+
+    for chain, cmd in zip(chains, cmds):
         (data_dir / chain["chain_id"]).mkdir()
         init_devnet(
             data_dir / chain["chain_id"], chain, base_port, image, cmd, gen_compose_file
@@ -1283,6 +1300,8 @@ def init_cluster(
                     {
                         "global": {
                             "api-listen-addr": ":5183",
+                            "debug-listen-addr": ":5183",
+                            "enable-debug-server": True,
                             "timeout": "10s",
                             "memo": "",
                             "light-cache-size": 20,

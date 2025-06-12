@@ -68,6 +68,16 @@ class ChainCommand:
 
         return "Available Commands" in output.decode()
 
+    def prob_event_query_tx_for(self):
+        'test if the command has "event-query-tx-for" subcommand'
+        try:
+            output = self("q", "event-query-tx-for")
+        except AssertionError:
+            # non-zero return code
+            return False
+
+        return "Available Commands" in output.decode()
+
     def __call__(self, cmd, *args, stdin=None, stderr=subprocess.STDOUT, **kwargs):
         "execute chain-maind"
         args = " ".join(build_cli_args_safe(cmd, *args, **kwargs))
@@ -100,6 +110,7 @@ class CosmosCLI:
         self.error = None
         self.has_genesis_subcommand = self.raw.prob_genesis_subcommand()
         self.has_icaauth_subcommand = self.raw.prob_icaauth_subcommand()
+        self.has_event_query_tx_for = self.raw.prob_event_query_tx_for()
 
     def node_id(self):
         "get tendermint node id"
@@ -119,7 +130,7 @@ class CosmosCLI:
             keyring_backend="test",
         )
 
-    def create_account(self, name, mnemonic=None):
+    def create_account(self, name, mnemonic=None, **kwargs):
         "create new keypair in node's keyring"
         if mnemonic is None:
             output = self.raw(
@@ -129,6 +140,7 @@ class CosmosCLI:
                 home=self.data_dir,
                 output="json",
                 keyring_backend="test",
+                **kwargs,
             )
         else:
             output = self.raw(
@@ -140,10 +152,11 @@ class CosmosCLI:
                 output="json",
                 keyring_backend="test",
                 stdin=mnemonic.encode() + b"\n",
+                **kwargs,
             )
         return json.loads(output)
 
-    def create_account_ledger(self, name):
+    def create_account_ledger(self, name, **kwargs):
         "create new ledger keypair"
 
         def send_request():
@@ -156,6 +169,7 @@ class CosmosCLI:
                     home=self.data_dir,
                     output="json",
                     keyring_backend="test",
+                    **kwargs,
                 )
             except Exception as e:
                 self.error = e
@@ -277,19 +291,32 @@ class CosmosCLI:
                 node=self.node_rpc,
             )
         )["commission"]
-        return parse_amount((res.get("commission") or res)[0])
+        if isinstance(res, dict):
+            res = res["commission"]
+        return parse_amount(res[0])
 
-    def distribution_community(self):
-        res = json.loads(
-            self.raw(
-                "query",
-                "distribution",
-                "community-pool",
-                output="json",
-                node=self.node_rpc,
-            )
-        )
-        return parse_amount(res["pool"][0])
+    def distribution_community(self, **kwargs):
+        for module in ["distribution", "protocolpool"]:
+            try:
+                res = json.loads(
+                    self.raw(
+                        "query",
+                        module,
+                        "community-pool",
+                        output="json",
+                        node=self.node_rpc,
+                        **kwargs,
+                    )
+                )
+                return parse_amount(res["pool"][0])
+            except Exception as e:
+                if (
+                    module == "distribution"
+                    and "CommunityPool query exposed by the external community pool"
+                    in str(e)
+                ):
+                    continue
+                raise
 
     def distribution_reward(self, delegator_addr):
         res = json.loads(
@@ -386,7 +413,12 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if not generate_only and rsp["code"] == 0 and event_query_tx:
+        if (
+            not generate_only
+            and rsp["code"] == 0
+            and event_query_tx
+            and self.has_event_query_tx_for
+        ):
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -422,7 +454,12 @@ class CosmosCLI:
                         **kwargs,
                     )
                 )
-                if not generate_only and self.output["code"] == 0 and event_query_tx:
+                if (
+                    not generate_only
+                    and self.output["code"] == 0
+                    and event_query_tx
+                    and self.has_event_query_tx_for
+                ):
                     self.output = self.event_query_tx_for(self.output["txhash"])
             except Exception as e:
                 self.error = e
@@ -478,7 +515,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -500,7 +537,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -531,7 +568,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -551,11 +588,11 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
-    def make_multisig(self, name, signer1, signer2):
+    def make_multisig(self, name, signer1, signer2, **kwargs):
         self.raw(
             "keys",
             "add",
@@ -564,6 +601,7 @@ class CosmosCLI:
             multisig_threshold="2",
             home=self.data_dir,
             keyring_backend="test",
+            **kwargs,
         )
 
     def sign_multisig_tx(self, tx_file, multi_addr, signer_name, **kwargs):
@@ -694,7 +732,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -743,7 +781,7 @@ class CosmosCLI:
                 **kwargs,
             )
         rsp = json.loads(raw)
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -793,7 +831,7 @@ class CosmosCLI:
             **kwargs,
         )
         rsp = json.loads(raw)
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -833,7 +871,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -927,7 +965,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -950,7 +988,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1027,7 +1065,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1065,7 +1103,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1124,7 +1162,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1161,7 +1199,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1193,7 +1231,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1223,7 +1261,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1296,7 +1334,7 @@ class CosmosCLI:
                 **(default_kwargs | kwargs),
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1356,7 +1394,7 @@ class CosmosCLI:
                 **(default_kwargs | kwargs),
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp["code"] == 0 and event_query_tx and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1411,7 +1449,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0:
+        if rsp["code"] == 0 and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1429,7 +1467,7 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if rsp["code"] == 0:
+        if rsp["code"] == 0 and self.has_event_query_tx_for:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1445,3 +1483,16 @@ class CosmosCLI:
                 output="json",
             )
         )["denom_trace"]
+
+    def ibc_denom(self, path, node):
+        denom_hash = hashlib.sha256(path.encode()).hexdigest().upper()
+        return json.loads(
+            self.raw(
+                "q",
+                "ibc-transfer",
+                "denom",
+                denom_hash,
+                node=node,
+                output="json",
+            )
+        )["denom"]
