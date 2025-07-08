@@ -132,6 +132,8 @@ class CosmosCLI:
 
     def create_account(self, name, mnemonic=None, **kwargs):
         "create new keypair in node's keyring"
+        if kwargs.get("coin_type") == 60:
+            kwargs["key_type"] = "eth_secp256k1"
         if mnemonic is None:
             output = self.raw(
                 "keys",
@@ -158,6 +160,8 @@ class CosmosCLI:
 
     def create_account_ledger(self, name, **kwargs):
         "create new ledger keypair"
+        if kwargs.get("coin_type") == 60:
+            kwargs["key_type"] = "eth_secp256k1"
 
         def send_request():
             try:
