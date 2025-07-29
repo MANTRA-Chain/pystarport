@@ -1039,6 +1039,7 @@ def init_devnet(
                 "identity",
                 "website",
                 "gas_prices",
+                "fees"
             ]
             extra_kwargs = {
                 name: str(node[name]) for name in optional_fields if name in node
