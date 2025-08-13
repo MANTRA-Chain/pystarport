@@ -102,8 +102,8 @@ class CosmosCLI:
         self.has_icaauth_subcommand = self.raw.prob_icaauth_subcommand()
 
     def node_id(self):
-        "get tendermint node id"
-        output = self.raw("tendermint", "show-node-id", home=self.data_dir)
+        "get comet node id"
+        output = self.raw("comet", "show-node-id", home=self.data_dir)
         return output.decode().strip()
 
     def delete_account(self, name):
@@ -716,7 +716,7 @@ class CosmosCLI:
         if "pubkey" not in options:
             pubkey = (
                 self.raw(
-                    "tendermint",
+                    "comet",
                     "show-validator",
                     home=self.data_dir,
                 )
@@ -762,7 +762,7 @@ class CosmosCLI:
         create the node with create_node before call this"""
         pubkey = (
             self.raw(
-                "tendermint",
+                "comet",
                 "show-validator",
                 home=self.data_dir,
             )
