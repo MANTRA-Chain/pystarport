@@ -68,6 +68,16 @@ class ChainCommand:
 
         return "Available Commands" in output.decode()
 
+    def prob_tendermint_subcommand(self):
+        'test if the command has "tendermint" subcommand, removed in evm 0.4.x'
+        try:
+            output = self("tendermint")
+        except AssertionError:
+            # non-zero return code
+            return False
+
+        return "Available Commands" in output.decode()
+
     def prob_event_query_tx_for(self):
         'test if the command has "event-query-tx-for" subcommand'
         try:
@@ -110,11 +120,13 @@ class CosmosCLI:
         self.error = None
         self.has_genesis_subcommand = self.raw.prob_genesis_subcommand()
         self.has_icaauth_subcommand = self.raw.prob_icaauth_subcommand()
+        self.has_tendermint_subcommand = self.raw.prob_tendermint_subcommand()
         self.has_event_query_tx_for = self.raw.prob_event_query_tx_for()
 
     def node_id(self):
         "get tendermint node id"
-        output = self.raw("tendermint", "show-node-id", home=self.data_dir)
+        subcmd = "tendermint" if self.has_tendermint_subcommand else "comet"
+        output = self.raw(subcmd, "show-node-id", home=self.data_dir)
         return output.decode().strip()
 
     def delete_account(self, name):
@@ -756,9 +768,10 @@ class CosmosCLI:
         } | options
 
         if "pubkey" not in options:
+            subcmd = "tendermint" if self.has_tendermint_subcommand else "comet"
             pubkey = (
                 self.raw(
-                    "tendermint",
+                    subcmd,
                     "show-validator",
                     home=self.data_dir,
                 )
@@ -802,9 +815,10 @@ class CosmosCLI:
     ):
         """MsgCreateValidator
         create the node with create_node before call this"""
+        subcmd = "tendermint" if self.has_tendermint_subcommand else "comet"
         pubkey = (
             self.raw(
-                "tendermint",
+                subcmd,
                 "show-validator",
                 home=self.data_dir,
             )
