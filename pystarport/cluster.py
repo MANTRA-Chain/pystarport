@@ -1031,23 +1031,34 @@ def init_devnet(
             cli.add_genesis_account(account["address"], node["coins"], i)
         if "staked" in node:
             optional_fields = [
+                "account_number",
                 "commission_max_change_rate",
                 "commission_max_rate",
                 "commission_rate",
                 "details",
                 "security_contact",
+                "sequence",
                 "identity",
                 "website",
                 "gas_prices",
+                "gas",
                 "fees"
             ]
             extra_kwargs = {
                 name: str(node[name]) for name in optional_fields if name in node
             }
+            gentx_extra_args = [config.get("cmd-flags")]
+            # build extra positional args; inject --offline if sequence or account_number set
+            has_acct = "account_number" in extra_kwargs
+            has_seq = "sequence" in extra_kwargs
+            if has_acct ^ has_seq:  # xor: only one provided
+                raise ValueError("Both 'account_number' and 'sequence' must be provided together for offline gentx")
+            if has_acct and has_seq:
+                gentx_extra_args.append("--offline")
             cli.gentx(
                 "validator",
                 node["staked"],
-                config.get("cmd-flags"),
+                *gentx_extra_args,
                 i=i,
                 min_self_delegation=node.get("min_self_delegation", 1),
                 pubkey=node.get("pubkey"),
