@@ -1254,8 +1254,12 @@ def init_cluster(
     extension = Path(config_path).suffix
     if extension == ".jsonnet":
         config = expand_jsonnet(config_path, dotenv)
-    else:
+    elif extension in [".yml", ".yaml"]:
         config = expand_yaml(config_path, dotenv)
+    elif extension == ".json":
+        config = json.loads(Path(config_path).read_text())
+    else:
+        raise ValueError("unsupported config file format: " + extension)
 
     relayer_config = config.pop("relayer", {})
     for chain_id, cfg in config.items():
