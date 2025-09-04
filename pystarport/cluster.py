@@ -1001,7 +1001,7 @@ def init_devnet(
                         "node": f"tcp://{val['hostname']}:{rpc_port}",
                         "broadcast-mode": "sync",
                     },
-                    val.get("client_config", {}),
+                    jsonmerge.merge(config.get("client_config", {}), val.get("client_config", {})),
                 )
             )
         )
