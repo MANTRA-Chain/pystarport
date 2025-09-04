@@ -49,6 +49,7 @@ class ClusterCLI:
         self,
         data,
         chain_id="chainmaind",
+        data_dir=None,
         cmd=None,
         zemu_address=ZEMU_HOST,
         zemu_button_port=ZEMU_BUTTON_PORT,
@@ -57,7 +58,7 @@ class ClusterCLI:
         self.zemu_address = zemu_address
         self.zemu_button_port = zemu_button_port
         self.chain_id = chain_id
-        self.data_dir = data / self.chain_id
+        self.data_dir = data / (data_dir if data_dir else chain_id)
         self.config = json.load((self.data_dir / "config.json").open())
         self.cmd = cmd or self.config.get("cmd") or CHAIN
 
@@ -983,6 +984,7 @@ def init_devnet(
         genesis_bytes = (data_dir / "node0/config/genesis.json").read_bytes()
     (data_dir / "genesis.json").write_bytes(genesis_bytes)
     (data_dir / "gentx").mkdir()
+    chain_id = config["chain_id"]
     for i, val in enumerate(config["validators"]):
         src = data_dir / f"node{i}/config/genesis.json"
         src.unlink()
@@ -991,23 +993,23 @@ def init_devnet(
 
         # write client config
         rpc_port = ports.rpc_port(val["base_port"])
+        merged = jsonmerge.merge(
+            {
+                "chain-id": chain_id,
+                "keyring-backend": "test",
+                "output": "json",
+                "node": f"tcp://{val['hostname']}:{rpc_port}",
+                "broadcast-mode": "sync",
+            },
+            jsonmerge.merge(config.get("client_config", {}), val.get("client_config", {})),
+        )
+        chain_id = merged["chain-id"]
         (data_dir / f"node{i}/config/client.toml").write_text(
-            tomlkit.dumps(
-                jsonmerge.merge(
-                    {
-                        "chain-id": config["chain_id"],
-                        "keyring-backend": "test",
-                        "output": "json",
-                        "node": f"tcp://{val['hostname']}:{rpc_port}",
-                        "broadcast-mode": "sync",
-                    },
-                    val.get("client_config", {}),
-                )
-            )
+            tomlkit.dumps(merged)
         )
 
     # now we can create ClusterCLI
-    cli = ClusterCLI(data_dir.parent, chain_id=config["chain_id"], cmd=cmd)
+    cli = ClusterCLI(data_dir.parent, chain_id=chain_id, data_dir=config["chain_id"], cmd=cmd)
 
     # patch the genesis file
     genesis = jsonmerge.merge(
@@ -1133,7 +1135,7 @@ def init_devnet(
             supervisord_ini(
                 cmd,
                 config["validators"],
-                config["chain_id"],
+                chain_id,
                 start_flags=start_flags,
             ),
         )
