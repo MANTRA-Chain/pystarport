@@ -25,6 +25,10 @@
 - [#129](https://github.com/crypto-com/pystarport/pull/129) create and get validator are incompatible.
 - [#137](https://github.com/crypto-com/pystarport/pull/137) support ica and icaauth cmd.
 - [#139](https://github.com/crypto-com/pystarport/pull/139) support ibc channel upgrade related methods.
+- [#141](https://github.com/crypto-com/pystarport/pull/141) make cmd flag support multiple chains.
+- [#142](https://github.com/crypto-com/pystarport/pull/142) add coin type when create account.
+- [#145](https://github.com/crypto-com/pystarport/pull/145) Backward compatible with binary that don't have event-query-tx-for.
+- [#147](https://github.com/crypto-com/pystarport/pull/147) suppport query exposed by the external community pool.
 
 *Feb 7, 2023*
 

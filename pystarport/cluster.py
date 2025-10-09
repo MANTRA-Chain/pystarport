@@ -49,6 +49,7 @@ class ClusterCLI:
         self,
         data,
         chain_id="chainmaind",
+        data_dir=None,
         cmd=None,
         zemu_address=ZEMU_HOST,
         zemu_button_port=ZEMU_BUTTON_PORT,
@@ -57,7 +58,7 @@ class ClusterCLI:
         self.zemu_address = zemu_address
         self.zemu_button_port = zemu_button_port
         self.chain_id = chain_id
-        self.data_dir = data / self.chain_id
+        self.data_dir = data / (data_dir if data_dir else chain_id)
         self.config = json.load((self.data_dir / "config.json").open())
         self.cmd = cmd or self.config.get("cmd") or CHAIN
 
@@ -186,6 +187,7 @@ class ClusterCLI:
         statesync=False,
         mnemonic=None,
         broadcastmode="sync",
+        coin_type=None,
     ):
         """create new node in the data directory,
         process information is written into supervisor config
@@ -257,7 +259,7 @@ class ClusterCLI:
         edit_app_cfg(home / "config/app.toml", base_port, {})
 
         # create validator account
-        self.create_account("validator", i, mnemonic)
+        self.create_account("validator", i, mnemonic, coin_type=coin_type)
 
         # add process config into supervisor
         path = self.data_dir / SUPERVISOR_CONFIG_FILE
@@ -311,13 +313,13 @@ class ClusterCLI:
         "delete account in i-th node's keyring"
         return self.cosmos_cli(i).delete_account(name)
 
-    def create_account(self, name, i=0, mnemonic=None):
+    def create_account(self, name, i=0, mnemonic=None, **kwargs):
         "create new keypair in i-th node's keyring"
-        return self.cosmos_cli(i).create_account(name, mnemonic)
+        return self.cosmos_cli(i).create_account(name, mnemonic, **kwargs)
 
-    def create_account_ledger(self, name, i=0):
+    def create_account_ledger(self, name, i=0, **kwargs):
         "create new ledger keypair"
-        return self.cosmos_cli(i).create_account_ledger(name)
+        return self.cosmos_cli(i).create_account_ledger(name, **kwargs)
 
     def init(self, i):
         "the i-th node's config is already added"
@@ -368,8 +370,8 @@ class ClusterCLI:
     def distribution_commission(self, addr, i=0):
         return self.cosmos_cli(i).distribution_commission(addr)
 
-    def distribution_community(self, i=0):
-        return self.cosmos_cli(i).distribution_community()
+    def distribution_community(self, i=0, **kwargs):
+        return self.cosmos_cli(i).distribution_community(**kwargs)
 
     def distribution_reward(self, delegator_addr, i=0):
         return self.cosmos_cli(i).distribution_reward(delegator_addr)
@@ -510,8 +512,8 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def make_multisig(self, name, signer1, signer2, i=0):
-        return self.cosmos_cli(i).make_multisig(name, signer1, signer2)
+    def make_multisig(self, name, signer1, signer2, i=0, **kwargs):
+        return self.cosmos_cli(i).make_multisig(name, signer1, signer2, **kwargs)
 
     def sign_multisig_tx(self, tx_file, multi_addr, signer_name, i=0, **kwargs):
         return self.cosmos_cli(i).sign_multisig_tx(
@@ -834,6 +836,9 @@ class ClusterCLI:
     def ibc_denom_trace(self, path, node, i=0):
         return self.cosmos_cli(i).ibc_denom_trace(path, node)
 
+    def ibc_denom(self, path, node, i=0):
+        return self.cosmos_cli(i).ibc_denom(path, node)
+
 
 def start_cluster(data_dir):
     cmd = [
@@ -900,14 +905,17 @@ def init_devnet(
     """
 
     def create_account(cli, account, use_ledger=False):
+        coin_type = account.get("coin-type")
         if use_ledger:
-            acct = cli.create_account_ledger(account["name"])
+            acct = cli.create_account_ledger(account["name"], coin_type=coin_type)
         elif account.get("address"):
             # if address field exists, will use account with that address directly
             acct = {"name": account.get("name"), "address": account.get("address")}
         else:
             mnemonic = account.get("mnemonic")
-            acct = cli.create_account(account["name"], mnemonic=mnemonic)
+            acct = cli.create_account(
+                account["name"], mnemonic=mnemonic, coin_type=coin_type
+            )
             if mnemonic:
                 acct["mnemonic"] = mnemonic
         vesting = account.get("vesting")
@@ -976,6 +984,7 @@ def init_devnet(
         genesis_bytes = (data_dir / "node0/config/genesis.json").read_bytes()
     (data_dir / "genesis.json").write_bytes(genesis_bytes)
     (data_dir / "gentx").mkdir()
+    chain_id = config["chain_id"]
     for i, val in enumerate(config["validators"]):
         src = data_dir / f"node{i}/config/genesis.json"
         src.unlink()
@@ -984,23 +993,23 @@ def init_devnet(
 
         # write client config
         rpc_port = ports.rpc_port(val["base_port"])
+        merged = jsonmerge.merge(
+            {
+                "chain-id": chain_id,
+                "keyring-backend": "test",
+                "output": "json",
+                "node": f"tcp://{val['hostname']}:{rpc_port}",
+                "broadcast-mode": "sync",
+            },
+            jsonmerge.merge(config.get("client_config", {}), val.get("client_config", {})),
+        )
+        chain_id = merged["chain-id"]
         (data_dir / f"node{i}/config/client.toml").write_text(
-            tomlkit.dumps(
-                jsonmerge.merge(
-                    {
-                        "chain-id": config["chain_id"],
-                        "keyring-backend": "test",
-                        "output": "json",
-                        "node": f"tcp://{val['hostname']}:{rpc_port}",
-                        "broadcast-mode": "sync",
-                    },
-                    val.get("client_config", {}),
-                )
-            )
+            tomlkit.dumps(merged)
         )
 
     # now we can create ClusterCLI
-    cli = ClusterCLI(data_dir.parent, chain_id=config["chain_id"], cmd=cmd)
+    cli = ClusterCLI(data_dir.parent, chain_id=chain_id, data_dir=config["chain_id"], cmd=cmd)
 
     # patch the genesis file
     genesis = jsonmerge.merge(
@@ -1013,7 +1022,10 @@ def init_devnet(
     accounts = []
     for i, node in enumerate(config["validators"]):
         mnemonic = node.get("mnemonic")
-        account = cli.create_account("validator", i, mnemonic=mnemonic)
+        coin_type = node.get("coin-type")
+        account = cli.create_account(
+            "validator", i, mnemonic=mnemonic, coin_type=coin_type
+        )
         if mnemonic:
             account["mnemonic"] = mnemonic
         accounts.append(account)
@@ -1021,22 +1033,34 @@ def init_devnet(
             cli.add_genesis_account(account["address"], node["coins"], i)
         if "staked" in node:
             optional_fields = [
+                "account_number",
                 "commission_max_change_rate",
                 "commission_max_rate",
                 "commission_rate",
                 "details",
                 "security_contact",
+                "sequence",
                 "identity",
                 "website",
                 "gas_prices",
+                "gas",
+                "fees"
             ]
             extra_kwargs = {
                 name: str(node[name]) for name in optional_fields if name in node
             }
+            gentx_extra_args = [config.get("cmd-flags")]
+            # build extra positional args; inject --offline if sequence or account_number set
+            has_acct = "account_number" in extra_kwargs
+            has_seq = "sequence" in extra_kwargs
+            if has_acct ^ has_seq:  # xor: only one provided
+                raise ValueError("Both 'account_number' and 'sequence' must be provided together for offline gentx")
+            if has_acct and has_seq:
+                gentx_extra_args.append("--offline")
             cli.gentx(
                 "validator",
                 node["staked"],
-                config.get("cmd-flags"),
+                *gentx_extra_args,
                 i=i,
                 min_self_delegation=node.get("min_self_delegation", 1),
                 pubkey=node.get("pubkey"),
@@ -1111,7 +1135,7 @@ def init_devnet(
             supervisord_ini(
                 cmd,
                 config["validators"],
-                config["chain_id"],
+                chain_id,
                 start_flags=start_flags,
             ),
         )
@@ -1232,8 +1256,12 @@ def init_cluster(
     extension = Path(config_path).suffix
     if extension == ".jsonnet":
         config = expand_jsonnet(config_path, dotenv)
-    else:
+    elif extension in [".yml", ".yaml"]:
         config = expand_yaml(config_path, dotenv)
+    elif extension == ".json":
+        config = json.loads(Path(config_path).read_text())
+    else:
+        raise ValueError("unsupported config file format: " + extension)
 
     relayer_config = config.pop("relayer", {})
     for chain_id, cfg in config.items():
@@ -1241,7 +1269,14 @@ def init_cluster(
         cfg["chain_id"] = chain_id
 
     chains = list(config.values())
-    for chain in chains:
+
+    # for multiple chains, there can be multiple cmds splited by `,`
+    if cmd is not None:
+        cmds = cmd.split(",")
+    else:
+        cmds = [None] * len(chains)
+
+    for chain, cmd in zip(chains, cmds):
         (data_dir / chain["chain_id"]).mkdir()
         init_devnet(
             data_dir / chain["chain_id"], chain, base_port, image, cmd, gen_compose_file
@@ -1283,6 +1318,8 @@ def init_cluster(
                     {
                         "global": {
                             "api-listen-addr": ":5183",
+                            "debug-listen-addr": ":5183",
+                            "enable-debug-server": True,
                             "timeout": "10s",
                             "memo": "",
                             "light-cache-size": 20,
@@ -1351,11 +1388,13 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
             command=f"{cmd} start --home . {start_flags}",
             stdout_logfile=f"{directory}.log",
         )
-
-        oracle_config = node["app-config"].get("oracle", {})
+        app_cfg = node.get("app-config", {})
+        if not app_cfg:
+            continue
+        oracle_config = app_cfg.get("oracle", {})
         if oracle_config.get("enabled"):
             oracle_port = ports.oracle_port(node["base_port"])
-            grpc_address = node["app-config"].get("grpc", {}).get("address", "")
+            grpc_address = app_cfg.get("grpc", {}).get("address", "")
             grpc_port = grpc_address.split(":")[1] if ":" in grpc_address else ports.grpc_port(node["base_port"])
             oracle_section = f"program:{chain_id}-node{i}-oracle"
             ini[oracle_section] = dict(
