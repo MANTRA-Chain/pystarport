@@ -8,6 +8,8 @@ keywords = ["CRO", "blockchain", "crypto.com", "cosmos"]
 readme = "README.md"
 homepage = "https://github.com/crypto-com/pystarport"
 repository = "https://github.com/crypto-com/pystarport"
+packages = [{include = "pystarport"}]
+include = ["pystarport/bin/*"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
