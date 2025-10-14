@@ -969,15 +969,17 @@ def init_devnet(
                 "node": f"tcp://{val['hostname']}:{rpc_port}",
                 "broadcast-mode": "sync",
             },
-            jsonmerge.merge(config.get("client_config", {}), val.get("client_config", {})),
+            jsonmerge.merge(
+                config.get("client_config", {}), val.get("client_config", {})
+            ),
         )
         chain_id = merged["chain-id"]
-        (data_dir / f"node{i}/config/client.toml").write_text(
-            tomlkit.dumps(merged)
-        )
+        (data_dir / f"node{i}/config/client.toml").write_text(tomlkit.dumps(merged))
 
     # now we can create ClusterCLI
-    cli = ClusterCLI(data_dir.parent, chain_id=chain_id, data_dir=config["chain_id"], cmd=cmd)
+    cli = ClusterCLI(
+        data_dir.parent, chain_id=chain_id, data_dir=config["chain_id"], cmd=cmd
+    )
 
     # patch the genesis file
     genesis = jsonmerge.merge(
@@ -1012,7 +1014,7 @@ def init_devnet(
                 "website",
                 "gas_prices",
                 "gas",
-                "fees"
+                "fees",
             ]
             extra_kwargs = {
                 name: str(node[name]) for name in optional_fields if name in node
@@ -1022,7 +1024,9 @@ def init_devnet(
             has_acct = "account_number" in extra_kwargs
             has_seq = "sequence" in extra_kwargs
             if has_acct ^ has_seq:  # xor: only one provided
-                raise ValueError("Both 'account_number' and 'sequence' must be provided together for offline gentx")
+                raise ValueError(
+                    "Both 'account_number' and 'sequence' must be provided together for offline gentx"
+                )
             if has_acct and has_seq:
                 gentx_extra_args.append("--offline")
             cli.gentx(
@@ -1363,7 +1367,11 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
         if oracle_config.get("enabled"):
             oracle_port = ports.oracle_port(node["base_port"])
             grpc_address = app_cfg.get("grpc", {}).get("address", "")
-            grpc_port = grpc_address.split(":")[1] if ":" in grpc_address else ports.grpc_port(node["base_port"])
+            grpc_port = (
+                grpc_address.split(":")[1]
+                if ":" in grpc_address
+                else ports.grpc_port(node["base_port"])
+            )
             oracle_section = f"program:{chain_id}-node{i}-oracle"
             ini[oracle_section] = dict(
                 COMMON_PROG_OPTIONS,
