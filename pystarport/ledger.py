@@ -1,13 +1,11 @@
 import io
 import os
-import socket
 import tarfile
 import time
 import uuid
 
 import docker
 
-ZEMU_HOST = "127.0.0.1"
 ZEMU_GRPC_SERVER_PORT = 3002
 ZEMU_API_PORT = 5001
 ZEMU_BUTTON_PORT = 1235
@@ -90,9 +88,16 @@ class Ledger:
         self.container_objects[self.name] = container
 
         try:
-            print("processes:\n" + container.exec_run("ps aux").output.decode())
-            print("/tmp/ contents:\n" + container.exec_run("ls -la /tmp/").output.decode())
-            print("python3 version: " + container.exec_run("python3 --version").output.decode().strip())
+            processes = container.exec_run("ps aux").output.decode()
+            tmp_contents = container.exec_run("ls -la /tmp/").output.decode()
+            python_version = (
+                container.exec_run("python3 --version").output.decode().strip()
+            )
+            print(
+                f"processes:\n{processes}\n"
+                f"/tmp/ contents:\n{tmp_contents}\n"
+                f"python3 version: {python_version}"
+            )
         except Exception as e:
             print(f"Debug info retrieval failed: {e}")
 
@@ -152,61 +157,3 @@ class Ledger:
         except Exception as e:
             print(f"Error checking container status: {e}")
             return False
-
-
-class LedgerButton:
-    def __init__(self, address=ZEMU_HOST, port=ZEMU_BUTTON_PORT):
-        self.address = address
-        self.port = port
-        self._client = None
-        self.connected = False
-
-    def connect(self):
-        if self.connected:
-            return True
-        try:
-            self._client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._client.connect((self.address, self.port))
-            self.connected = True
-            print(f"Connected to button TCP at {self.address}:{self.port}", flush=True)
-            return True
-        except Exception as e:
-            print(f"Connect failed: {e}", flush=True)
-            return False
-
-    def _send(self, data):
-        if not self.connect():
-            return False
-        try:
-            self._client.send(data.encode())
-            return True
-        except Exception as e:
-            print(f"Button press failed: {e}", flush=True)
-            return False
-
-    def press_left(self):
-        if self._send("Ll"):
-            print("Pressed left button", flush=True)
-            return True
-        return False
-
-    def press_right(self):
-        if self._send("Rr"):
-            print("Pressed right button", flush=True)
-            return True
-        return False
-
-    def press_both(self):
-        if self._send("LRlr"):
-            print("Pressed both buttons", flush=True)
-            return True
-        return False
-
-    def disconnect(self):
-        if self.connected and self._client:
-            try:
-                self._client.close()
-                self.connected = False
-                print("Disconnected from button TCP", flush=True)
-            except Exception as e:
-                print(f"Disconnect failed: {e}", flush=True)

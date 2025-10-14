@@ -26,7 +26,6 @@ from . import ports
 from .app import CHAIN, IMAGE, SUPERVISOR_CONFIG_FILE
 from .cosmoscli import ChainCommand, CosmosCLI, ModuleAccount, module_address
 from .expansion import expand_jsonnet, expand_yaml
-from .ledger import ZEMU_BUTTON_PORT, ZEMU_HOST
 from .utils import format_doc_string, get_sync_info, interact, write_ini
 
 COMMON_PROG_OPTIONS = {
@@ -51,12 +50,8 @@ class ClusterCLI:
         chain_id="chainmaind",
         data_dir=None,
         cmd=None,
-        zemu_address=ZEMU_HOST,
-        zemu_button_port=ZEMU_BUTTON_PORT,
     ):
         self.data_root = data
-        self.zemu_address = zemu_address
-        self.zemu_button_port = zemu_button_port
         self.chain_id = chain_id
         self.data_dir = data / (data_dir if data_dir else chain_id)
         self.config = json.load((self.data_dir / "config.json").open())
@@ -72,8 +67,6 @@ class ClusterCLI:
             self.node_rpc(i),
             chain_id=self.chain_id,
             cmd=self.cmd,
-            zemu_address=self.zemu_address,
-            zemu_button_port=self.zemu_button_port,
         )
 
     @property
@@ -316,10 +309,6 @@ class ClusterCLI:
     def create_account(self, name, i=0, mnemonic=None, **kwargs):
         "create new keypair in i-th node's keyring"
         return self.cosmos_cli(i).create_account(name, mnemonic, **kwargs)
-
-    def create_account_ledger(self, name, i=0, **kwargs):
-        "create new ledger keypair"
-        return self.cosmos_cli(i).create_account_ledger(name, **kwargs)
 
     def init(self, i):
         "the i-th node's config is already added"
@@ -886,7 +875,7 @@ def init_devnet(
     def create_account(cli, account, use_ledger=False):
         coin_type = account.get("coin-type")
         if use_ledger:
-            acct = cli.create_account_ledger(account["name"], coin_type=coin_type)
+            acct = cli.create_account(account["name"], coin_type=coin_type, ledger=True)
         elif account.get("address"):
             # if address field exists, will use account with that address directly
             acct = {"name": account.get("name"), "address": account.get("address")}

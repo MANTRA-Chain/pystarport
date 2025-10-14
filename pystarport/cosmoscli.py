@@ -3,15 +3,12 @@ import hashlib
 import json
 import subprocess
 import tempfile
-import threading
-import time
 
 import bech32
 import durations
 from dateutil.parser import isoparse
 
 from .app import CHAIN
-from .ledger import ZEMU_BUTTON_PORT, ZEMU_HOST, LedgerButton
 from .utils import (
     build_cli_args_safe,
     format_doc_string,
@@ -93,8 +90,6 @@ class CosmosCLI:
         node_rpc,
         chain_id=None,
         cmd=None,
-        zemu_address=ZEMU_HOST,
-        zemu_button_port=ZEMU_BUTTON_PORT,
     ):
         self.data_dir = data_dir
         if chain_id is None:
@@ -105,7 +100,6 @@ class CosmosCLI:
             self.chain_id = chain_id
         self.node_rpc = node_rpc
         self.raw = ChainCommand(cmd)
-        self.leger_button = LedgerButton(zemu_address, zemu_button_port)
         self.output = None
         self.error = None
         self.has_genesis_subcommand = self.raw.prob_genesis_subcommand()
@@ -131,65 +125,35 @@ class CosmosCLI:
             keyring_backend="test",
         )
 
-    def create_account(self, name, mnemonic=None, **kwargs):
+    def get_base_kwargs(self):
+        return {
+            "home": self.data_dir,
+            "node": self.node_rpc,
+            "output": "json",
+        }
+
+    def get_kwargs(self):
+        return self.get_base_kwargs() | {
+            "keyring_backend": "test",
+            "chain_id": self.chain_id,
+        }
+
+    def create_account(self, name, mnemonic=None, ledger=False, **kwargs):
         "create new keypair in node's keyring"
-        if kwargs.get("coin_type") == 60:
-            kwargs["key_type"] = "eth_secp256k1"
-        if mnemonic is None:
-            output = self.raw(
-                "keys",
-                "add",
-                name,
-                home=self.data_dir,
-                output="json",
-                keyring_backend="test",
-                **kwargs,
-            )
-        else:
-            output = self.raw(
-                "keys",
-                "add",
-                name,
-                "--recover",
-                home=self.data_dir,
-                output="json",
-                keyring_backend="test",
-                stdin=mnemonic.encode() + b"\n",
-                **kwargs,
-            )
+        if kwargs.get("coin_type", 60) == 60:
+            kwargs.update({"coin_type": 60, "key_type": "eth_secp256k1"})
+        args = {**self.get_kwargs(), **kwargs}
+        cmd = ["keys", "add", name]
+        if mnemonic is not None:
+            cmd.append("--recover")
+        if ledger:
+            cmd.append("--ledger")
+        if mnemonic is None and kwargs.get("source"):
+            cmd.append("--recover")
+        output = self.raw(
+            *cmd, stdin=(mnemonic.encode() + b"\n") if mnemonic else None, **args
+        )
         return json.loads(output)
-
-    def create_account_ledger(self, name, **kwargs):
-        "create new ledger keypair"
-        if kwargs.get("coin_type") == 60:
-            kwargs["key_type"] = "eth_secp256k1"
-
-        def send_request():
-            try:
-                self.output = self.raw(
-                    "keys",
-                    "add",
-                    name,
-                    "--ledger",
-                    home=self.data_dir,
-                    output="json",
-                    keyring_backend="test",
-                    **kwargs,
-                )
-            except Exception as e:
-                self.error = e
-
-        t = threading.Thread(target=send_request)
-        t.start()
-        time.sleep(3)
-        for _ in range(0, 3):
-            self.leger_button.press_right()
-            time.sleep(0.2)
-        self.leger_button.press_both()
-        t.join()
-        if self.error:
-            raise self.error
-        return json.loads(self.output)
 
     def init(self, moniker):
         "the node's config is already added"
