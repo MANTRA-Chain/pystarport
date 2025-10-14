@@ -15,11 +15,14 @@ ZEMU_IMAGE = "zondax/builder-zemu:speculos-261ece66796d4e8e15d944a5ab7ee35246eb8
 
 
 class Ledger:
-    def __init__(self):
+    def __init__(self, elf_file="app_cosmos.elf", model="nanos", seed=None):
         self.name = f"ledger_simulator_{uuid.uuid4().hex[:8]}"
         self.client = docker.from_env()
         self.containers = []
         self.container_objects = {}
+        self.elf_file = elf_file
+        self.model = model
+        self.seed = seed
 
     def _pull_image(self):
         try:
@@ -73,7 +76,7 @@ class Ledger:
         self._cleanup()
 
         base_path = os.path.dirname(__file__)
-        elf_path = os.path.join(base_path, "bin", "app.elf")
+        elf_path = os.path.join(base_path, "bin", self.elf_file)
         entrypoint_path = os.path.join(base_path, "entrypoint.py")
 
         if not (os.path.exists(elf_path) and os.path.exists(entrypoint_path)):
@@ -93,7 +96,9 @@ class Ledger:
                 "ZEMU_API_PORT": str(ZEMU_API_PORT),
                 "ZEMU_GRPC_SERVER_PORT": str(ZEMU_GRPC_SERVER_PORT),
                 "ZEMU_BUTTON_PORT": str(ZEMU_BUTTON_PORT),
-                "LEDGER_BINARY": "/tmp/app.elf",
+                "LEDGER_BINARY": f"/tmp/{self.elf_file}",
+                "LEDGER_MODEL": self.model,
+                "LEDGER_SEED": self.seed,
                 "PYTHONPATH": "/tmp",
                 "PYTHONUNBUFFERED": "1",
             },
@@ -103,7 +108,7 @@ class Ledger:
 
         tar_stream = io.BytesIO()
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-            tar.add(elf_path, arcname="app.elf")
+            tar.add(elf_path, arcname=self.elf_file)
             info = tarfile.TarInfo(name="entrypoint.py")
             info.size = os.path.getsize(entrypoint_path)
             info.mode = 0o755

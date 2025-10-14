@@ -109,16 +109,19 @@ def add_ZemuCommandServicer_to_server(servicer, server):
 
 def start_speculos():
     print("Starting Speculos...", flush=True)
-    ledger_binary = os.getenv("LEDGER_BINARY", "/tmp/app.elf")
+    ledger_binary = os.getenv("LEDGER_BINARY", "/tmp/app_evm.elf")
     if not os.path.exists(ledger_binary):
         print(f"Ledger binary not found at {ledger_binary}", flush=True)
         return None
 
+    ledger_model = os.getenv("LEDGER_MODEL", "nanos")
+    ledger_seed = os.getenv("LEDGER_SEED")
     speculos_cmd = [
         "/home/zondax/speculos/speculos.py",
         "--model",
-        "nanos",
+        ledger_model,
         ledger_binary,
+        *(["--seed", ledger_seed] if ledger_seed else []),
         "--display",
         "headless",
         "--apdu-port",
