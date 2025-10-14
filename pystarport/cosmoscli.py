@@ -125,17 +125,11 @@ class CosmosCLI:
             keyring_backend="test",
         )
 
-    def get_base_kwargs(self):
-        return {
-            "home": self.data_dir,
-            "node": self.node_rpc,
-            "output": "json",
-        }
-
     def get_kwargs(self):
-        return self.get_base_kwargs() | {
+        return {
+            "output": "json",
             "keyring_backend": "test",
-            "chain_id": self.chain_id,
+            "home": self.data_dir,
         }
 
     def create_account(self, name, mnemonic=None, ledger=False, **kwargs):
