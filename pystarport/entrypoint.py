@@ -109,7 +109,7 @@ def add_ZemuCommandServicer_to_server(servicer, server):
 
 def start_speculos():
     print("Starting Speculos...", flush=True)
-    ledger_binary = os.getenv("LEDGER_BINARY", "/tmp/app_evm.elf")
+    ledger_binary = os.getenv("LEDGER_BINARY", "/tmp/app_cosmos.elf")
     if not os.path.exists(ledger_binary):
         print(f"Ledger binary not found at {ledger_binary}", flush=True)
         return None
