@@ -398,7 +398,7 @@ class CosmosCLI:
         to,
         coins,
         generate_only=False,
-        event_query_tx=True,
+        ledger=False,
         **kwargs,
     ):
         rsp = json.loads(
@@ -411,6 +411,7 @@ class CosmosCLI:
                 coins,
                 "-y",
                 "--generate-only" if generate_only else None,
+                "--ledger" if ledger else None,
                 home=self.data_dir,
                 keyring_backend="test",
                 chain_id=self.chain_id,
@@ -418,66 +419,9 @@ class CosmosCLI:
                 **kwargs,
             )
         )
-        if (
-            not generate_only
-            and rsp["code"] == 0
-            and event_query_tx
-        ):
+        if not generate_only and rsp["code"] == 0:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
-
-    def transfer_from_ledger(
-        self,
-        from_,
-        to,
-        coins,
-        generate_only=False,
-        fees=None,
-        event_query_tx=True,
-        **kwargs,
-    ):
-        def send_request():
-            try:
-                self.output = json.loads(
-                    self.raw(
-                        "tx",
-                        "bank",
-                        "send",
-                        from_,
-                        to,
-                        coins,
-                        "-y",
-                        "--generate-only" if generate_only else "",
-                        "--ledger",
-                        home=self.data_dir,
-                        keyring_backend="test",
-                        chain_id=self.chain_id,
-                        node=self.node_rpc,
-                        fees=fees,
-                        sign_mode="amino-json",
-                        **kwargs,
-                    )
-                )
-                if (
-                    not generate_only
-                    and self.output["code"] == 0
-                    and event_query_tx
-                ):
-                    self.output = self.event_query_tx_for(self.output["txhash"])
-            except Exception as e:
-                self.error = e
-
-        t = threading.Thread(target=send_request)
-        t.start()
-        time.sleep(3)
-        for _ in range(0, 11):
-            self.leger_button.press_right()
-            time.sleep(0.4)
-        self.leger_button.press_both()
-        t.join()
-        if self.error:
-            raise self.error
-        return self.output
 
     def get_delegated_amount(self, which_addr):
         return json.loads(

@@ -418,7 +418,7 @@ class ClusterCLI:
         coins,
         i=0,
         generate_only=False,
-        event_query_tx=True,
+        ledger=False,
         **kwargs,
     ):
         return self.cosmos_cli(i).transfer(
@@ -426,28 +426,7 @@ class ClusterCLI:
             to,
             coins,
             generate_only,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
-
-    def transfer_from_ledger(
-        self,
-        from_,
-        to,
-        coins,
-        i=0,
-        generate_only=False,
-        fees=None,
-        event_query_tx=True,
-        **kwargs,
-    ):
-        return self.cosmos_cli(i).transfer_from_ledger(
-            from_,
-            to,
-            coins,
-            generate_only,
-            fees,
-            event_query_tx=event_query_tx,
+            ledger,
             **kwargs,
         )
 

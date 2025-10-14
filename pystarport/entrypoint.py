@@ -251,12 +251,19 @@ class SpeculosGRPCBridge:
                     flush=True,
                 )
 
+                # Handle GET_ADDRESS command
                 if ins == 0x04 and len(cmd) >= 4 and cmd[2] == 0x01:
                     print(
                         "   GET_ADDRESS command detected - manual buttons", flush=True
                     )
                     return self._handle_address_request(cmd)
 
+                # Handle SIGN command - transaction signing
+                elif ins == 0x02:
+                    print("   SIGN command detected - transaction signing", flush=True)
+                    return self._handle_transaction_signing(cmd)
+
+            # For all other commands, send directly to Speculos
             resp = requests.post(
                 self.api_url,
                 json={"data": cmd_hex},
@@ -295,6 +302,163 @@ class SpeculosGRPCBridge:
         except Exception as e:
             print(f"gRPC Exchange error: {e}", flush=True)
             return ExchangeReply(reply=bytes.fromhex("6985"))
+
+    def _handle_transaction_signing(self, cmd):
+        """Handle transaction signing with automated button presses"""
+        print("Starting transaction signing automation", flush=True)
+
+        # For transaction signing, we need to handle the final confirmation step
+        p1, p2 = cmd[2], cmd[3] if len(cmd) >= 4 else (0, 0)
+
+        # Check if this is the final signing step (P1=02)
+        if p1 == 0x02:
+            print("Final signing step detected - need user confirmation", flush=True)
+            return self._handle_final_transaction_approval(cmd)
+
+        # For other signing steps (P1=00, P1=01), send directly to Speculos
+        try:
+            resp = requests.post(
+                self.api_url,
+                json={"data": cmd.hex()},
+                timeout=10,
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                response_hex = result.get("data", "")
+                if response_hex:
+                    response_bytes = bytes.fromhex(response_hex)
+                    print(f"Signing step response: {response_hex}", flush=True)
+                    return ExchangeReply(reply=response_bytes)
+
+            print(f"Signing step failed: HTTP {resp.status_code}", flush=True)
+            return ExchangeReply(reply=bytes.fromhex("6985"))
+
+        except Exception as e:
+            print(f"Signing step error: {e}", flush=True)
+            return ExchangeReply(reply=bytes.fromhex("6985"))
+
+    def _handle_final_transaction_approval(self, cmd):
+        print("Handling final transaction approval", flush=True)
+
+        apdu_result = [None]
+        apdu_complete = threading.Event()
+
+        def send_apdu():
+            try:
+                print("Sending final signing APDU...", flush=True)
+                response = requests.post(
+                    self.api_url,
+                    json={"data": cmd.hex()},
+                    timeout=60,  # Longer timeout for user interaction
+                    headers={"Content-Type": "application/json"},
+                )
+                if response.status_code == 200:
+                    data = response.json().get("data", "")
+                    apdu_result[0] = (
+                        bytes.fromhex(data) if data else bytes.fromhex("6985")
+                    )
+                    print(f"Final signing completed: {data}", flush=True)
+                else:
+                    apdu_result[0] = bytes.fromhex("6985")
+                    print(
+                        f"Final signing HTTP error: {response.status_code}", flush=True
+                    )
+            except requests.exceptions.Timeout:
+                apdu_result[0] = bytes.fromhex("6408")
+                print("Final signing timed out", flush=True)
+            except Exception as e:
+                apdu_result[0] = bytes.fromhex("6985")
+                print(f"Final signing failed: {e}", flush=True)
+            finally:
+                apdu_complete.set()
+
+        def transaction_approval():
+            try:
+                # Wait for transaction to be displayed
+                time.sleep(3)
+                btn_client = self._get_button_client()
+                if not btn_client.connect():
+                    print(
+                        "Failed to connect to buttons for transaction approval",
+                        flush=True,
+                    )
+                    return
+
+                print("Starting transaction approval sequence...", flush=True)
+                # Based on the screen sequence, we need to navigate through:
+                # 1. Chain ID screen
+                # 2. Account screen
+                # 3. Sequence screen
+                # 4. Type screen
+                # 5. Amount screen
+                # 6. From address [1/2]
+                # 7. From address [2/2]
+                # 8. To address [1/2]
+                # 9. To address [2/2]
+                # 10. Fee screen
+                # 11. Gas screen
+                # 12. APPROVE screen (STOP HERE)
+                # 13. REJECT screen (DON'T GO HERE)
+                screens_to_navigate = 11  # Stop at APPROVE screen (don't go to REJECT)
+
+                for i in range(screens_to_navigate):
+                    if apdu_complete.is_set():
+                        print("Transaction completed during navigation", flush=True)
+                        break
+
+                    print(f"Navigating screen {i+1}/{screens_to_navigate}", flush=True)
+                    btn_client.press_right()
+                    time.sleep(2)  # Delay for screen transitions
+
+                # Now we should be on the APPROVE screen
+                if not apdu_complete.is_set():
+                    print(
+                        "Should be on APPROVE screen - attempting approval", flush=True
+                    )
+
+                    # Try approval multiple times
+                    for attempt in range(6):
+                        if apdu_complete.is_set():
+                            print("Transaction approved successfully!", flush=True)
+                            break
+
+                        print(f"Approval attempt {attempt+1}/6", flush=True)
+                        btn_client.press_both()
+                        time.sleep(2.5)
+
+                        # If we're not approved yet and it's early attempts,
+                        # maybe we need to navigate back to APPROVE from REJECT
+                        if attempt == 2 and not apdu_complete.is_set():
+                            print(
+                                "Trying to navigate back to APPROVE screen", flush=True
+                            )
+                            btn_client.press_left()  # Go back from REJECT to APPROVE
+                            time.sleep(1.5)
+                        elif attempt == 4 and not apdu_complete.is_set():
+                            print("Final attempt - ensure we're on APPROVE", flush=True)
+                            btn_client.press_left()  # Go back to APPROVE if on REJECT
+                            time.sleep(1)
+
+                    if not apdu_complete.is_set():
+                        print("All approval attempts failed", flush=True)
+
+                btn_client.disconnect()
+                print("Transaction approval sequence completed", flush=True)
+
+            except Exception as e:
+                print(f"Transaction approval failed: {e}", flush=True)
+
+        # Start both threads
+        threading.Thread(target=send_apdu, daemon=True).start()
+        threading.Thread(target=transaction_approval, daemon=True).start()
+
+        if apdu_complete.wait(timeout=60) and apdu_result[0]:
+            print("Transaction signing completed successfully", flush=True)
+            return ExchangeReply(reply=apdu_result[0])
+
+        print("Transaction signing failed or timed out", flush=True)
+        return ExchangeReply(reply=bytes.fromhex("6985"))
 
     def _handle_address_request(self, cmd):
         print("GET_ADDRESS detected - starting address verification", flush=True)
