@@ -26,7 +26,6 @@ from . import ports
 from .app import CHAIN, IMAGE, SUPERVISOR_CONFIG_FILE
 from .cosmoscli import ChainCommand, CosmosCLI, ModuleAccount, module_address
 from .expansion import expand_jsonnet, expand_yaml
-from .ledger import ZEMU_BUTTON_PORT, ZEMU_HOST
 from .utils import format_doc_string, get_sync_info, interact, write_ini
 
 COMMON_PROG_OPTIONS = {
@@ -51,12 +50,8 @@ class ClusterCLI:
         chain_id="chainmaind",
         data_dir=None,
         cmd=None,
-        zemu_address=ZEMU_HOST,
-        zemu_button_port=ZEMU_BUTTON_PORT,
     ):
         self.data_root = data
-        self.zemu_address = zemu_address
-        self.zemu_button_port = zemu_button_port
         self.chain_id = chain_id
         self.data_dir = data / (data_dir if data_dir else chain_id)
         self.config = json.load((self.data_dir / "config.json").open())
@@ -72,8 +67,6 @@ class ClusterCLI:
             self.node_rpc(i),
             chain_id=self.chain_id,
             cmd=self.cmd,
-            zemu_address=self.zemu_address,
-            zemu_button_port=self.zemu_button_port,
         )
 
     @property
@@ -317,10 +310,6 @@ class ClusterCLI:
         "create new keypair in i-th node's keyring"
         return self.cosmos_cli(i).create_account(name, mnemonic, **kwargs)
 
-    def create_account_ledger(self, name, i=0, **kwargs):
-        "create new ledger keypair"
-        return self.cosmos_cli(i).create_account_ledger(name, **kwargs)
-
     def init(self, i):
         "the i-th node's config is already added"
         return self.cosmos_cli(i).init(self.config["validators"][i]["moniker"])
@@ -418,7 +407,7 @@ class ClusterCLI:
         coins,
         i=0,
         generate_only=False,
-        event_query_tx=True,
+        ledger=False,
         **kwargs,
     ):
         return self.cosmos_cli(i).transfer(
@@ -426,28 +415,7 @@ class ClusterCLI:
             to,
             coins,
             generate_only,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
-
-    def transfer_from_ledger(
-        self,
-        from_,
-        to,
-        coins,
-        i=0,
-        generate_only=False,
-        fees=None,
-        event_query_tx=True,
-        **kwargs,
-    ):
-        return self.cosmos_cli(i).transfer_from_ledger(
-            from_,
-            to,
-            coins,
-            generate_only,
-            fees,
-            event_query_tx=event_query_tx,
+            ledger,
             **kwargs,
         )
 
@@ -907,7 +875,7 @@ def init_devnet(
     def create_account(cli, account, use_ledger=False):
         coin_type = account.get("coin-type")
         if use_ledger:
-            acct = cli.create_account_ledger(account["name"], coin_type=coin_type)
+            acct = cli.create_account(account["name"], coin_type=coin_type, ledger=True)
         elif account.get("address"):
             # if address field exists, will use account with that address directly
             acct = {"name": account.get("name"), "address": account.get("address")}
@@ -1001,15 +969,17 @@ def init_devnet(
                 "node": f"tcp://{val['hostname']}:{rpc_port}",
                 "broadcast-mode": "sync",
             },
-            jsonmerge.merge(config.get("client_config", {}), val.get("client_config", {})),
+            jsonmerge.merge(
+                config.get("client_config", {}), val.get("client_config", {})
+            ),
         )
         chain_id = merged["chain-id"]
-        (data_dir / f"node{i}/config/client.toml").write_text(
-            tomlkit.dumps(merged)
-        )
+        (data_dir / f"node{i}/config/client.toml").write_text(tomlkit.dumps(merged))
 
     # now we can create ClusterCLI
-    cli = ClusterCLI(data_dir.parent, chain_id=chain_id, data_dir=config["chain_id"], cmd=cmd)
+    cli = ClusterCLI(
+        data_dir.parent, chain_id=chain_id, data_dir=config["chain_id"], cmd=cmd
+    )
 
     # patch the genesis file
     genesis = jsonmerge.merge(
@@ -1044,7 +1014,7 @@ def init_devnet(
                 "website",
                 "gas_prices",
                 "gas",
-                "fees"
+                "fees",
             ]
             extra_kwargs = {
                 name: str(node[name]) for name in optional_fields if name in node
@@ -1054,7 +1024,9 @@ def init_devnet(
             has_acct = "account_number" in extra_kwargs
             has_seq = "sequence" in extra_kwargs
             if has_acct ^ has_seq:  # xor: only one provided
-                raise ValueError("Both 'account_number' and 'sequence' must be provided together for offline gentx")
+                raise ValueError(
+                    "Both 'account_number' and 'sequence' must be provided together for offline gentx"
+                )
             if has_acct and has_seq:
                 gentx_extra_args.append("--offline")
             cli.gentx(
@@ -1395,7 +1367,11 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
         if oracle_config.get("enabled"):
             oracle_port = ports.oracle_port(node["base_port"])
             grpc_address = app_cfg.get("grpc", {}).get("address", "")
-            grpc_port = grpc_address.split(":")[1] if ":" in grpc_address else ports.grpc_port(node["base_port"])
+            grpc_port = (
+                grpc_address.split(":")[1]
+                if ":" in grpc_address
+                else ports.grpc_port(node["base_port"])
+            )
             oracle_section = f"program:{chain_id}-node{i}-oracle"
             ini[oracle_section] = dict(
                 COMMON_PROG_OPTIONS,
