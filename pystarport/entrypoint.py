@@ -8,8 +8,6 @@ import threading
 import time
 from concurrent import futures
 
-import requests
-
 
 def ensure_deps_installed():
     def install_package(package_names):
@@ -62,10 +60,15 @@ if not ensure_deps_installed():
 
 import grpc
 from ledger_utils import (
+    STATUS_GENERAL_ERROR,
+    STATUS_WRONG_LENGTH,
     ZEMU_API_PORT,
     ZEMU_BUTTON_PORT,
     ZEMU_GRPC_SERVER_PORT,
+    LedgerAPDU,
     LedgerButton,
+    cosmos_address_automation,
+    ethereum_transaction_automation,
 )
 
 
@@ -167,31 +170,24 @@ def start_speculos():
 
 class SpeculosGRPCBridge:
     def __init__(self):
-        self.host = "127.0.0.1"
-        self.port = ZEMU_API_PORT
-        self.api_url = f"http://{self.host}:{self.port}/apdu"
+        self.apdu_client = LedgerAPDU(ZEMU_API_PORT)
         self._test_speculos_connection()
 
     def _test_speculos_connection(self):
         for attempt in range(10):
             try:
-                resp = requests.get(f"http://{self.host}:{self.port}/", timeout=5)
+                import requests
+
+                resp = requests.get(f"http://127.0.0.1:{ZEMU_API_PORT}/", timeout=5)
                 if resp.status_code == 200:
-                    apdu_resp = requests.post(
-                        self.api_url, json={"data": "B001000000"}, timeout=10
-                    )
-                    if apdu_resp.status_code == 200:
+                    test_response = self.apdu_client.send_apdu("B001000000", timeout=10)
+                    if LedgerAPDU.is_success(test_response):
                         return True
-            except requests.exceptions.ConnectionError:
-                pass
             except Exception as e:
                 print(f"Connection test error: {e}", flush=True)
             time.sleep(2)
         print("Failed to connect to Speculos after all retries", flush=True)
         return False
-
-    def _get_button_client(self):
-        return LedgerButton()
 
     def Exchange(self, request, context):
         try:
@@ -213,276 +209,80 @@ class SpeculosGRPCBridge:
                         return self._handle_cosmos_transaction_signing(cmd)
 
             # Default: send to Speculos
-            resp = requests.post(
-                self.api_url,
-                json={"data": cmd_hex},
-                timeout=30,
-                headers={"Content-Type": "application/json"},
-            )
-
-            if resp.status_code == 200:
-                result = resp.json()
-                response_hex = result.get("data", "")
-                if response_hex:
-                    response_bytes = bytes.fromhex(response_hex)
-                    return ExchangeReply(reply=response_bytes)
-
-            return ExchangeReply(reply=bytes.fromhex("6F00"))
+            response_bytes = self.apdu_client.send_apdu(cmd_hex, timeout=30)
+            return ExchangeReply(reply=response_bytes)
 
         except Exception as e:
             print(f"gRPC Exchange error: {e}", flush=True)
-            return ExchangeReply(reply=bytes.fromhex("6F00"))
+            return ExchangeReply(reply=STATUS_GENERAL_ERROR)
 
     def _handle_eth_address_request(self, cmd):
-        if len(cmd) >= 4:
-            p1, p2 = cmd[2], cmd[3]
+        if len(cmd) < 4:
+            return ExchangeReply(reply=STATUS_WRONG_LENGTH)
 
         # Try silent mode first
         if len(cmd) >= 3 and cmd[2] == 0x01:
             silent_cmd = bytearray(cmd)
             silent_cmd[2] = 0x00
-
-            try:
-                resp = requests.post(
-                    self.api_url,
-                    json={"data": silent_cmd.hex()},
-                    timeout=10,
-                    headers={"Content-Type": "application/json"},
-                )
-                if resp.status_code == 200:
-                    result = resp.json()
-                    response_hex = result.get("data", "")
-                    if response_hex and bytes.fromhex(response_hex)[-2:] == b"\x90\x00":
-                        return ExchangeReply(reply=bytes.fromhex(response_hex))
-            except Exception:
-                pass
+            response_bytes = self.apdu_client.send_apdu(silent_cmd.hex(), timeout=10)
+            if LedgerAPDU.is_success(response_bytes):
+                return ExchangeReply(reply=response_bytes)
 
         return self._handle_eth_interactive_address(cmd)
 
     def _handle_eth_interactive_address(self, cmd):
-        apdu_result = [None]
-        apdu_complete = threading.Event()
+        btn_client = LedgerButton()
 
-        def send_apdu():
-            try:
-                response = requests.post(
-                    self.api_url,
-                    json={"data": cmd.hex()},
-                    timeout=30,
-                    headers={"Content-Type": "application/json"},
-                )
-                if response.status_code == 200:
-                    data = response.json().get("data", "")
-                    apdu_result[0] = (
-                        bytes.fromhex(data) if data else bytes.fromhex("6985")
-                    )
-                else:
-                    apdu_result[0] = bytes.fromhex("6985")
-            except Exception:
-                apdu_result[0] = bytes.fromhex("6985")
-            finally:
-                apdu_complete.set()
-
-        def address_approval():
+        def automation(apdu_complete):
             try:
                 time.sleep(2)
-                btn_client = self._get_button_client()
                 if not btn_client.connect():
                     return
-
                 time.sleep(3)
                 if not apdu_complete.is_set():
                     btn_client.press_both()
                     time.sleep(2)
-
                 btn_client.disconnect()
             except Exception:
                 pass
 
-        threading.Thread(target=send_apdu, daemon=True).start()
-        threading.Thread(target=address_approval, daemon=True).start()
+        response_bytes = self.apdu_client.send_apdu_with_automation(
+            cmd.hex(), automation, timeout=40
+        )
 
-        if apdu_complete.wait(timeout=40) and apdu_result[0]:
-            return ExchangeReply(reply=apdu_result[0])
-
-        return ExchangeReply(reply=bytes.fromhex("6985"))
+        return ExchangeReply(reply=response_bytes)
 
     def _handle_eth_transaction_signing(self, cmd):
-        return self._handle_eth_tx_with_approval(cmd)
+        btn_client = LedgerButton()
 
-    def _handle_eth_tx_with_approval(self, cmd):
-        apdu_result = [None]
-        apdu_complete = threading.Event()
+        def automation(apdu_complete):
+            ethereum_transaction_automation(btn_client, apdu_complete)
 
-        def send_apdu():
-            try:
-                response = requests.post(
-                    self.api_url,
-                    json={"data": cmd.hex()},
-                    timeout=90,
-                    headers={"Content-Type": "application/json"},
-                )
-                if response.status_code == 200:
-                    data = response.json().get("data", "")
-                    apdu_result[0] = (
-                        bytes.fromhex(data) if data else bytes.fromhex("6985")
-                    )
-                else:
-                    apdu_result[0] = bytes.fromhex("6985")
-            except Exception:
-                apdu_result[0] = bytes.fromhex("6985")
-            finally:
-                apdu_complete.set()
+        response_bytes = self.apdu_client.send_apdu_with_automation(
+            cmd.hex(), automation, timeout=100
+        )
 
-        def eth_tx_approval():
-            try:
-                time.sleep(4)
-                btn_client = self._get_button_client()
-                if not btn_client.connect():
-                    return
-
-                screen_delays = [3, 2.5, 2.5, 2.5, 2]
-                screen_names = [
-                    "Review",
-                    "Amount",
-                    "To Address",
-                    "Max Fees",
-                    "Accept/Reject",
-                ]
-
-                for i, (delay, name) in enumerate(zip(screen_delays, screen_names)):
-                    if apdu_complete.is_set():
-                        break
-                    btn_client.press_right()
-                    time.sleep(delay)
-
-                if not apdu_complete.is_set():
-                    for attempt in range(8):
-                        if apdu_complete.is_set():
-                            break
-
-                        if attempt < 3:
-                            btn_client.press_both()
-                            time.sleep(3)
-                        elif attempt == 3:
-                            btn_client.press_left()
-                            time.sleep(1.5)
-                            btn_client.press_right()
-                            time.sleep(1.5)
-                            btn_client.press_both()
-                            time.sleep(3)
-                        elif attempt == 4:
-                            btn_client.press_right()
-                            time.sleep(1)
-                            btn_client.press_both()
-                            time.sleep(3)
-                        else:
-                            btn_client.press_both()
-                            time.sleep(4)
-
-                btn_client.disconnect()
-
-            except Exception:
-                pass
-
-        threading.Thread(target=send_apdu, daemon=True).start()
-        threading.Thread(target=eth_tx_approval, daemon=True).start()
-
-        if apdu_complete.wait(timeout=100) and apdu_result[0]:
-            return ExchangeReply(reply=apdu_result[0])
-
-        return ExchangeReply(reply=bytes.fromhex("6985"))
+        return ExchangeReply(reply=response_bytes)
 
     def _handle_cosmos_address_request(self, cmd):
         # Try silent mode first
         silent_cmd = bytearray(cmd)
         silent_cmd[2] = 0x00
-
-        try:
-            resp = requests.post(
-                self.api_url,
-                json={"data": silent_cmd.hex()},
-                timeout=10,
-                headers={"Content-Type": "application/json"},
-            )
-            if resp.status_code == 200:
-                res = resp.json()
-                hex_data = res.get("data", "")
-                if hex_data and bytes.fromhex(hex_data)[-2:] == b"\x90\x00":
-                    return ExchangeReply(reply=bytes.fromhex(hex_data))
-        except Exception:
-            pass
+        response_bytes = self.apdu_client.send_apdu(silent_cmd.hex(), timeout=10)
+        if LedgerAPDU.is_success(response_bytes):
+            return ExchangeReply(reply=response_bytes)
 
         # Interactive mode
-        apdu_result = [None]
-        apdu_complete = threading.Event()
+        btn_client = LedgerButton()
 
-        def send_apdu():
-            try:
-                response = requests.post(
-                    self.api_url,
-                    json={"data": cmd.hex()},
-                    timeout=45,
-                    headers={"Content-Type": "application/json"},
-                )
-                if response.status_code == 200:
-                    data = response.json().get("data", "")
-                    apdu_result[0] = (
-                        bytes.fromhex(data) if data else bytes.fromhex("6985")
-                    )
-                else:
-                    apdu_result[0] = bytes.fromhex("6985")
-            except requests.exceptions.Timeout:
-                apdu_result[0] = bytes.fromhex("6408")
-            except Exception:
-                apdu_result[0] = bytes.fromhex("6985")
-            finally:
-                apdu_complete.set()
+        def automation(apdu_complete):
+            cosmos_address_automation(btn_client, apdu_complete)
 
-        def user_interaction():
-            try:
-                time.sleep(3)
-                btn_client = self._get_button_client()
-                if not btn_client.connect():
-                    return
+        response_bytes = self.apdu_client.send_apdu_with_automation(
+            cmd.hex(), automation, timeout=40
+        )
 
-                btn_client.press_right()
-                time.sleep(2)
-                btn_client.press_right()
-                time.sleep(1)
-                btn_client.press_both()
-                time.sleep(2)
-
-                if (
-                    apdu_complete.is_set()
-                    and apdu_result[0]
-                    and apdu_result[0][-2:] == b"\x90\x00"
-                ):
-                    btn_client.disconnect()
-                    return
-
-                btn_client.press_left()
-                time.sleep(1)
-                btn_client.press_both()
-                time.sleep(1)
-
-                if not apdu_complete.is_set():
-                    btn_client.press_right()
-                    time.sleep(1)
-                    btn_client.press_both()
-                    time.sleep(1)
-
-                btn_client.disconnect()
-            except Exception:
-                pass
-
-        threading.Thread(target=send_apdu, daemon=True).start()
-        threading.Thread(target=user_interaction, daemon=True).start()
-
-        if apdu_complete.wait(timeout=40) and apdu_result[0]:
-            return ExchangeReply(reply=apdu_result[0])
-
-        return ExchangeReply(reply=bytes.fromhex("6985"))
+        return ExchangeReply(reply=response_bytes)
 
     def _handle_cosmos_transaction_signing(self, cmd):
         p1, p2 = cmd[2], cmd[3] if len(cmd) >= 4 else (0, 0)
@@ -491,64 +291,26 @@ class SpeculosGRPCBridge:
             return self._handle_final_transaction_approval(cmd)
 
         # Non-final signing steps
-        try:
-            resp = requests.post(
-                self.api_url,
-                json={"data": cmd.hex()},
-                timeout=10,
-                headers={"Content-Type": "application/json"},
-            )
-            if resp.status_code == 200:
-                result = resp.json()
-                response_hex = result.get("data", "")
-                if response_hex:
-                    return ExchangeReply(reply=bytes.fromhex(response_hex))
-
-            return ExchangeReply(reply=bytes.fromhex("6985"))
-        except Exception:
-            return ExchangeReply(reply=bytes.fromhex("6985"))
+        response_bytes = self.apdu_client.send_apdu(cmd.hex(), timeout=10)
+        return ExchangeReply(reply=response_bytes)
 
     def _handle_final_transaction_approval(self, cmd):
-        apdu_result = [None]
-        apdu_complete = threading.Event()
+        btn_client = LedgerButton()
 
-        def send_apdu():
-            try:
-                response = requests.post(
-                    self.api_url,
-                    json={"data": cmd.hex()},
-                    timeout=60,
-                    headers={"Content-Type": "application/json"},
-                )
-                if response.status_code == 200:
-                    data = response.json().get("data", "")
-                    apdu_result[0] = (
-                        bytes.fromhex(data) if data else bytes.fromhex("6985")
-                    )
-                else:
-                    apdu_result[0] = bytes.fromhex("6985")
-            except requests.exceptions.Timeout:
-                apdu_result[0] = bytes.fromhex("6408")
-            except Exception:
-                apdu_result[0] = bytes.fromhex("6985")
-            finally:
-                apdu_complete.set()
-
-        def transaction_approval():
+        def automation(apdu_complete):
             try:
                 time.sleep(3)
-                btn_client = self._get_button_client()
                 if not btn_client.connect():
                     return
 
-                screens_to_navigate = 11
-
-                for i in range(screens_to_navigate):
+                # Navigate through screens
+                for i in range(11):
                     if apdu_complete.is_set():
                         break
                     btn_client.press_right()
                     time.sleep(2)
 
+                # Approval attempts
                 if not apdu_complete.is_set():
                     for attempt in range(6):
                         if apdu_complete.is_set():
@@ -567,13 +329,11 @@ class SpeculosGRPCBridge:
             except Exception:
                 pass
 
-        threading.Thread(target=send_apdu, daemon=True).start()
-        threading.Thread(target=transaction_approval, daemon=True).start()
+        response_bytes = self.apdu_client.send_apdu_with_automation(
+            cmd.hex(), automation, timeout=60
+        )
 
-        if apdu_complete.wait(timeout=60) and apdu_result[0]:
-            return ExchangeReply(reply=apdu_result[0])
-
-        return ExchangeReply(reply=bytes.fromhex("6985"))
+        return ExchangeReply(reply=response_bytes)
 
 
 def main():
