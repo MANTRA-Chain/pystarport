@@ -949,74 +949,32 @@ class CosmosCLI:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
-    def gov_propose(self, proposer, kind, proposal, **kwargs):
-        if kind == "software-upgrade":
-            return json.loads(
-                self.raw(
-                    "tx",
-                    "gov",
-                    "submit-proposal",
-                    kind,
-                    proposal["name"],
-                    "-y",
-                    from_=proposer,
-                    # content
-                    title=proposal.get("title"),
-                    description=proposal.get("description"),
-                    upgrade_height=proposal.get("upgrade-height"),
-                    upgrade_time=proposal.get("upgrade-time"),
-                    upgrade_info=proposal.get("upgrade-info"),
-                    deposit=proposal.get("deposit"),
-                    # basic
-                    home=self.data_dir,
-                    node=self.node_rpc,
-                    keyring_backend="test",
-                    chain_id=self.chain_id,
-                    **kwargs,
-                )
+    def software_upgrade(self, proposer, proposal, **kwargs):
+        default_kwargs = self.get_kwargs()
+        rsp = json.loads(
+            self.raw(
+                "tx",
+                "upgrade",
+                "software-upgrade",
+                proposal["name"],
+                "-y",
+                "--no-validate",
+                from_=proposer,
+                # content
+                title=proposal.get("title"),
+                note=proposal.get("note"),
+                upgrade_height=proposal.get("upgrade-height"),
+                upgrade_time=proposal.get("upgrade-time"),
+                upgrade_info=proposal.get("upgrade-info"),
+                summary=proposal.get("summary"),
+                deposit=proposal.get("deposit"),
+                # basic
+                **(default_kwargs | kwargs),
             )
-        elif kind == "cancel-software-upgrade":
-            return json.loads(
-                self.raw(
-                    "tx",
-                    "gov",
-                    "submit-proposal",
-                    kind,
-                    "-y",
-                    from_=proposer,
-                    # content
-                    title=proposal.get("title"),
-                    description=proposal.get("description"),
-                    deposit=proposal.get("deposit"),
-                    # basic
-                    home=self.data_dir,
-                    node=self.node_rpc,
-                    keyring_backend="test",
-                    chain_id=self.chain_id,
-                    **kwargs,
-                )
-            )
-        else:
-            with tempfile.NamedTemporaryFile("w") as fp:
-                json.dump(proposal, fp)
-                fp.flush()
-                return json.loads(
-                    self.raw(
-                        "tx",
-                        "gov",
-                        "submit-proposal",
-                        kind,
-                        fp.name,
-                        "-y",
-                        from_=proposer,
-                        # basic
-                        home=self.data_dir,
-                        node=self.node_rpc,
-                        keyring_backend="test",
-                        chain_id=self.chain_id,
-                        **kwargs,
-                    )
-                )
+        )
+        if rsp.get("code") == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp
 
     def gov_vote(self, voter, proposal_id, option, event_query_tx=True, **kwargs):
         rsp = json.loads(

@@ -586,8 +586,8 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def gov_propose(self, proposer, kind, proposal, i=0, **kwargs):
-        return self.cosmos_cli(i).gov_propose(proposer, kind, proposal, **kwargs)
+    def software_upgrade(self, proposer, proposal, i=0, **kwargs):
+        return self.cosmos_cli(i).software_upgrade(proposer, proposal, **kwargs)
 
     def gov_vote(self, voter, proposal_id, option, i=0, event_query_tx=True, **kwargs):
         return self.cosmos_cli(i).gov_vote(
