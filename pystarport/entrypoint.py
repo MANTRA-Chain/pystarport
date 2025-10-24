@@ -29,7 +29,7 @@ def ensure_deps_installed():
     except ImportError:
         success, error = install_package(["grpcio", "grpcio-tools"])
         if success:
-            import grpc
+            import grpc  # noqa: F401
 
             grpc_available = True
         else:
@@ -37,7 +37,7 @@ def ensure_deps_installed():
             grpc_available = False
 
     try:
-        from ledger_utils import LedgerButton
+        from ledger_utils import LedgerButton  # noqa: F401
 
         ledger_button_available = True
     except ImportError as e:
@@ -58,8 +58,8 @@ if not ensure_deps_installed():
     print("Failed to load required dependencies", flush=True)
     sys.exit(1)
 
-import grpc
-from ledger_utils import (
+import grpc  # noqa: E402
+from ledger_utils import (  # noqa: E402
     STATUS_GENERAL_ERROR,
     STATUS_WRONG_LENGTH,
     ZEMU_API_PORT,
@@ -94,11 +94,11 @@ class ExchangeReply:
         if length < 128:
             return bytes([0x0A, length]) + self.reply
         length_bytes = []
-        l = length
-        while l > 127:
-            length_bytes.append((l & 0x7F) | 0x80)
-            l >>= 7
-        length_bytes.append(l & 0x7F)
+        remaining_length = length
+        while remaining_length > 127:
+            length_bytes.append((remaining_length & 0x7F) | 0x80)
+            remaining_length >>= 7
+        length_bytes.append(remaining_length & 0x7F)
         return bytes([0x0A]) + bytes(length_bytes) + self.reply
 
 
@@ -285,7 +285,7 @@ class SpeculosGRPCBridge:
         return ExchangeReply(reply=response_bytes)
 
     def _handle_cosmos_transaction_signing(self, cmd):
-        p1, p2 = cmd[2], cmd[3] if len(cmd) >= 4 else (0, 0)
+        p1, _ = cmd[2], cmd[3] if len(cmd) >= 4 else (0, 0)
 
         if p1 == 0x02:
             return self._handle_final_transaction_approval(cmd)
