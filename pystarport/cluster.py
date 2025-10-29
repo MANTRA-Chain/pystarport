@@ -306,16 +306,19 @@ class ClusterCLI:
         "delete account in i-th node's keyring"
         return self.cosmos_cli(i).delete_account(name)
 
-    def create_account(self, name, i=0, mnemonic=None, **kwargs):
+    def create_account(self, name, i=0, mnemonic=None, ledger=False, **kwargs):
         "create new keypair in i-th node's keyring"
-        return self.cosmos_cli(i).create_account(name, mnemonic, **kwargs)
+        return self.cosmos_cli(i).create_account(name, mnemonic, ledger, **kwargs)
+
+    def list_accounts(self, i=0, **kwargs):
+        return self.cosmos_cli(i).list_accounts(**kwargs)
 
     def init(self, i):
         "the i-th node's config is already added"
         return self.cosmos_cli(i).init(self.config["validators"][i]["moniker"])
 
-    def export(self, i=0):
-        return self.cosmos_cli(i).export()
+    def export(self, i=0, **kwargs):
+        return self.cosmos_cli(i).export(**kwargs)
 
     def validate_genesis(self, *args, i=0):
         return self.cosmos_cli(i).validate_genesis(*args)
@@ -347,23 +350,38 @@ class ClusterCLI:
     def block_time(self, i=0):
         return self.cosmos_cli(i).block_time()
 
-    def balances(self, addr, height=0, i=0):
-        return self.cosmos_cli(i).balances(addr, height)
+    def balances(self, addr, height=0, i=0, **kwargs):
+        return self.cosmos_cli(i).balances(addr, height, **kwargs)
 
     def balance(self, addr, denom=None, height=0, i=0):
         return self.cosmos_cli(i).balance(addr, denom, height)
 
-    def query_all_txs(self, addr, i=0):
-        return self.cosmos_cli(i).query_all_txs(addr)
+    def query_bank_send(self, i=0, *denoms, **kwargs):
+        return self.cosmos_cli(i).query_bank_send(*denoms, **kwargs)
 
-    def distribution_commission(self, addr, i=0):
-        return self.cosmos_cli(i).distribution_commission(addr)
+    def query_bank_denom_metadata(self, denom, i=0, **kwargs):
+        return self.cosmos_cli(i).query_bank_denom_metadata(denom, **kwargs)
 
-    def distribution_community(self, i=0, **kwargs):
-        return self.cosmos_cli(i).distribution_community(**kwargs)
+    def query_all_txs(self, addr, i=0, **kwargs):
+        return self.cosmos_cli(i).query_all_txs(addr, **kwargs)
 
-    def distribution_reward(self, delegator_addr, i=0):
-        return self.cosmos_cli(i).distribution_reward(delegator_addr)
+    def fund_community_pool(self, amt, i=0, **kwargs):
+        return self.cosmos_cli(i).fund_community_pool(amt, **kwargs)
+
+    def fund_validator_rewards_pool(self, val_addr, amt, i=0, **kwargs):
+        return self.cosmos_cli(i).fund_validator_rewards_pool(val_addr, amt, **kwargs)
+
+    def distribution_commission(self, addr, i=0, **kwargs):
+        return self.cosmos_cli(i).distribution_commission(addr, **kwargs)
+
+    def set_withdraw_addr(self, addr, i=0, **kwargs):
+        return self.cosmos_cli(i).set_withdraw_addr(addr, **kwargs)
+
+    def distribution_community_pool(self, i=0, **kwargs):
+        return self.cosmos_cli(i).distribution_community_pool(**kwargs)
+
+    def distribution_rewards(self, delegator_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).distribution_rewards(delegator_addr, **kwargs)
 
     def address(self, name, i=0, bech="acc"):
         return self.cosmos_cli(i).address(name, bech)
@@ -379,23 +397,41 @@ class ClusterCLI:
         """
         return module_address(name)
 
-    def account(self, addr, i=0):
-        return self.cosmos_cli(i).account(addr)
+    def account(self, addr, i=0, **kwargs):
+        return self.cosmos_cli(i).account(addr, **kwargs)
+
+    def account_by_num(self, num, i=0, **kwargs):
+        return self.cosmos_cli(i).account_by_num(num, **kwargs)
+
+    def create_periodic_vesting_acct(self, to_address, amount, end_time, i=0, **kwargs):
+        return self.cosmos_cli(i).create_periodic_vesting_acct(
+            to_address,
+            amount,
+            end_time,
+            **kwargs,
+        )
+
+    def create_periodic_vesting_account(self, to_address, periods, i=0, **kwargs):
+        return self.cosmos_cli(i).create_periodic_vesting_account(
+            to_address,
+            periods,
+            **kwargs,
+        )
 
     def supply(self, supply_type, i=0):
         return self.cosmos_cli(i).supply(supply_type)
 
-    def validator(self, addr, i=0):
-        return self.cosmos_cli(i).validator(addr)
+    def validator(self, addr, i=0, **kwargs):
+        return self.cosmos_cli(i).validator(addr, **kwargs)
 
     def validators(self, i=0):
         return self.cosmos_cli(i).validators()
 
-    def staking_params(self, i=0):
-        return self.cosmos_cli(i).staking_params()
+    def get_params(self, module, i=0, **kwargs):
+        return self.cosmos_cli(i).get_params(module, **kwargs)
 
-    def staking_pool(self, bonded=True, i=0):
-        return self.cosmos_cli(i).staking_pool(bonded)
+    def staking_pool(self, bonded=True, i=0, **kwargs):
+        return self.cosmos_cli(i).staking_pool(bonded, **kwargs)
 
     def transfer_offline(self, from_, to, coins, sequence, i=0, fees=None):
         return self.cosmos_cli(i).transfer_offline(from_, to, coins, sequence, fees)
@@ -405,9 +441,10 @@ class ClusterCLI:
         from_,
         to,
         coins,
-        i=0,
         generate_only=False,
-        ledger=False,
+        event_query_tx=True,
+        fees=None,
+        i=0,
         **kwargs,
     ):
         return self.cosmos_cli(i).transfer(
@@ -415,70 +452,34 @@ class ClusterCLI:
             to,
             coins,
             generate_only,
-            ledger,
+            event_query_tx,
+            fees,
             **kwargs,
         )
 
-    def get_delegated_amount(self, which_addr, i=0):
-        return self.cosmos_cli(i).get_delegated_amount(which_addr)
+    def delegation(self, del_addr, val_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).delegation(del_addr, val_addr, **kwargs)
 
-    def delegate_amount(
-        self,
-        to_addr,
-        amount,
-        from_addr,
-        i=0,
-        gas_price=None,
-        event_query_tx=True,
-        **kwargs,
-    ):
-        return self.cosmos_cli(i).delegate_amount(
-            to_addr,
-            amount,
-            from_addr,
-            gas_price,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
+    def delegations(self, del_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).delegations(del_addr, **kwargs)
 
-    # to_addr: croclcl1...  , from_addr: cro1...
-    def unbond_amount(
-        self, to_addr, amount, from_addr, i=0, event_query_tx=True, **kwargs
-    ):
-        return self.cosmos_cli(i).unbond_amount(
-            to_addr,
-            amount,
-            from_addr,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
+    def delegate_amount(self, to_addr, amt, i=0, **kwargs):
+        return self.cosmos_cli(i).delegate_amount(to_addr, amt, **kwargs)
 
-    # to_validator_addr: crocncl1...  ,  from_from_validator_addraddr: crocl1...
-    def redelegate_amount(
-        self,
-        to_validator_addr,
-        from_validator_addr,
-        amount,
-        from_addr,
-        i=0,
-        event_query_tx=True,
-        **kwargs,
-    ):
-        return self.cosmos_cli(i).redelegate_amount(
-            to_validator_addr,
-            from_validator_addr,
-            amount,
-            from_addr,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
+    def unbond_amount(self, to_addr, amt, i=0, **kwargs):
+        return self.cosmos_cli(i).unbond_amount(to_addr, amt, **kwargs)
 
-    def withdraw_all_rewards(self, from_delegator, i=0, event_query_tx=True, **kwargs):
-        return self.cosmos_cli(i).withdraw_all_rewards(
-            from_delegator,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
+    def redelegate(self, from_addr, to_addr, amt, i=0, **kwargs):
+        return self.cosmos_cli(i).redelegate(from_addr, to_addr, amt, **kwargs)
+
+    def withdraw_all_rewards(self, i=0, **kwargs):
+        return self.cosmos_cli(i).withdraw_all_rewards(**kwargs)
+
+    def withdraw_rewards(self, val_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).withdraw_rewards(val_addr, **kwargs)
+
+    def withdraw_validator_commission(self, val_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).withdraw_validator_commission(val_addr, **kwargs)
 
     def make_multisig(self, name, signer1, signer2, i=0, **kwargs):
         return self.cosmos_cli(i).make_multisig(name, signer1, signer2, **kwargs)
@@ -525,6 +526,15 @@ class ClusterCLI:
 
     def broadcast_tx(self, tx_file, i=0, **kwargs):
         return self.cosmos_cli(i).broadcast_tx(tx_file, **kwargs)
+
+    def broadcast_tx_json(self, tx, i=0, **kwargs):
+        return self.cosmos_cli(i).broadcast_tx_json(tx, **kwargs)
+
+    def sign_tx(self, tx_file, signer, i=0, **kwargs):
+        return self.cosmos_cli(i).sign_tx(tx_file, signer, **kwargs)
+
+    def sign_tx_json(self, tx, signer, max_priority_price=None, i=0, **kwargs):
+        return self.cosmos_cli(i).sign_tx_json(tx, signer, max_priority_price, **kwargs)
 
     def unjail(self, addr, i=0, event_query_tx=True, **kwargs):
         return self.cosmos_cli(i).unjail(addr, event_query_tx=event_query_tx, **kwargs)
@@ -576,8 +586,8 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def gov_propose(self, proposer, kind, proposal, i=0, **kwargs):
-        return self.cosmos_cli(i).gov_propose(proposer, kind, proposal, **kwargs)
+    def software_upgrade(self, proposer, proposal, i=0, **kwargs):
+        return self.cosmos_cli(i).software_upgrade(proposer, proposal, **kwargs)
 
     def gov_vote(self, voter, proposal_id, option, i=0, event_query_tx=True, **kwargs):
         return self.cosmos_cli(i).gov_vote(
@@ -599,36 +609,20 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def query_proposals(self, depositor=None, limit=None, status=None, voter=None, i=0):
-        return self.cosmos_cli(i).query_proposals(depositor, limit, status, voter)
+    def submit_gov_proposal(self, proposal, i=0, **kwargs):
+        return self.cosmos_cli(i).submit_gov_proposal(proposal, **kwargs)
 
-    def query_proposal(self, proposal_id, i=0):
-        res = self.cosmos_cli(i).query_proposal(proposal_id)
-        return res.get("proposal") or res
+    def query_proposals(self, i=0, **kwargs):
+        return self.cosmos_cli(i).query_proposals(**kwargs)
 
-    def query_tally(self, proposal_id, i=0):
-        return self.cosmos_cli(i).query_tally(proposal_id)
+    def query_proposal(self, proposal_id, i=0, **kwargs):
+        return self.cosmos_cli(i).query_proposal(proposal_id, **kwargs)
 
-    def ibc_transfer(
-        self,
-        from_,
-        to,
-        amount,
-        channel,  # src channel
-        target_version,  # chain version number of target chain
-        i=0,
-        event_query_tx=True,
-        **kwargs,
-    ):
-        return self.cosmos_cli(i).ibc_transfer(
-            from_,
-            to,
-            amount,
-            channel,
-            target_version,
-            event_query_tx=event_query_tx,
-            **kwargs,
-        )
+    def query_tally(self, proposal_id, i=0, **kwargs):
+        return self.cosmos_cli(i).query_tally(proposal_id, **kwargs)
+
+    def ibc_transfer(self, to, amount, src_channel, i=0, **kwargs):
+        return self.cosmos_cli(i).ibc_transfer(to, amount, src_channel, **kwargs)
 
     def create_nft(
         self,
@@ -744,8 +738,8 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def event_query_tx_for(self, hash, i=0):
-        return self.cosmos_cli(i).event_query_tx_for(hash)
+    def event_query_tx_for(self, hash, i=0, **kwargs):
+        return self.cosmos_cli(i).event_query_tx_for(hash, **kwargs)
 
     def migrate_keystore(self, i=0):
         return self.cosmos_cli(i).migrate_keystore()
@@ -806,6 +800,54 @@ class ClusterCLI:
 
     def ibc_denom(self, path, node, i=0):
         return self.cosmos_cli(i).ibc_denom(path, node)
+
+    def ibc_denom_hash(self, path, i=0, **kwargs):
+        return self.cosmos_cli(i).ibc_denom_hash(path, **kwargs)
+
+    def comet_validator_set(self, height, i=0, **kwargs):
+        return self.cosmos_cli(i).comet_validator_set(height, **kwargs)
+
+    def query_grant(self, granter, grantee, i=0, **kwargs):
+        return self.cosmos_cli(i).query_grant(granter, grantee, **kwargs)
+
+    def tx_search(self, events, i=0, **kwargs):
+        return self.cosmos_cli(i).tx_search(events, **kwargs)
+
+    def query_erc20_token_pair(self, token, i=0, **kwargs):
+        return self.cosmos_cli(i).query_erc20_token_pair(token, **kwargs)
+
+    def query_erc20_token_pairs(self, i=0, **kwargs):
+        return self.cosmos_cli(i).query_erc20_token_pairs(**kwargs)
+
+    def convert_erc20(self, contract, amt, i=0, **kwargs):
+        return self.cosmos_cli(i).convert_erc20(contract, amt, **kwargs)
+
+    def register_erc20(self, contract, i=0, **kwargs):
+        return self.cosmos_cli(i).register_erc20(contract, **kwargs)
+
+    def rollback(self, i=0):
+        return self.cosmos_cli(i).rollback()
+
+    def prune(self, kind="everything", i=0):
+        return self.cosmos_cli(i).prune(kind)
+
+    def grant_authorization(self, grantee, authz_type, i=0, **kwargs):
+        return self.cosmos_cli(i).grant_authorization(grantee, authz_type, **kwargs)
+
+    def exec_tx_by_grantee(self, tx_file, i=0, **kwargs):
+        return self.cosmos_cli(i).exec_tx_by_grantee(tx_file, **kwargs)
+
+    def revoke_authorization(self, grantee, msg_type, i=0, **kwargs):
+        return self.cosmos_cli(i).revoke_authorization(grantee, msg_type, **kwargs)
+
+    def query_grants(self, granter, grantee, i=0, **kwargs):
+        return self.cosmos_cli(i).query_grants(granter, grantee, **kwargs)
+
+    def query_base_fee(self, i=0, **kwargs):
+        return self.cosmos_cli(i).query_base_fee(**kwargs)
+
+    def build_evm_tx(self, raw_tx: str, i=0, **kwargs):
+        return self.cosmos_cli(i).build_evm_tx(raw_tx, **kwargs)
 
 
 def start_cluster(data_dir):
@@ -1020,12 +1062,13 @@ def init_devnet(
                 name: str(node[name]) for name in optional_fields if name in node
             }
             gentx_extra_args = [config.get("cmd-flags")]
-            # build extra positional args; inject --offline if sequence or account_number set
+            # build extra positional args;
+            # inject --offline if sequence or account_number set
             has_acct = "account_number" in extra_kwargs
             has_seq = "sequence" in extra_kwargs
             if has_acct ^ has_seq:  # xor: only one provided
                 raise ValueError(
-                    "Both 'account_number' and 'sequence' must be provided together for offline gentx"
+                    "Both 'account_number' and 'sequence' must be provided together for offline gentx"  # noqa: E501
                 )
             if has_acct and has_seq:
                 gentx_extra_args.append("--offline")
@@ -1376,7 +1419,7 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
             ini[oracle_section] = dict(
                 COMMON_PROG_OPTIONS,
                 directory=directory,
-                command=f"connect --market-map-endpoint=localhost:{grpc_port} --port {oracle_port}",
+                command=f"connect --market-map-endpoint=localhost:{grpc_port} --port {oracle_port}",  # noqa: E501
                 stdout_logfile=f"{directory}-oracle.log",
             )
 
