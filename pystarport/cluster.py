@@ -443,6 +443,7 @@ class ClusterCLI:
         coins,
         generate_only=False,
         event_query_tx=True,
+        ledger=False,
         fees=None,
         i=0,
         **kwargs,
@@ -453,6 +454,7 @@ class ClusterCLI:
             coins,
             generate_only,
             event_query_tx,
+            ledger,
             fees,
             **kwargs,
         )

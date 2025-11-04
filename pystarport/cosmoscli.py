@@ -500,6 +500,7 @@ class CosmosCLI:
         coins,
         generate_only=False,
         event_query_tx=True,
+        ledger=False,
         fees=None,
         **kwargs,
     ):
@@ -513,6 +514,7 @@ class CosmosCLI:
                 coins,
                 "-y",
                 "--generate-only" if generate_only else None,
+                "--ledger" if ledger else None,
                 fees=fees,
                 **(self.get_kwargs_with_gas() | kwargs),
             )
