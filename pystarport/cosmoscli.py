@@ -1495,31 +1495,16 @@ class CosmosCLI:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
-    def ibc_denom_trace(self, path, node):
-        denom_hash = hashlib.sha256(path.encode()).hexdigest().upper()
-        return json.loads(
-            self.raw(
-                "q",
-                "ibc-transfer",
-                "denom-trace",
-                denom_hash,
-                node=node,
-                output="json",
-            )
-        )["denom_trace"]
-
-    def ibc_denom(self, path, node):
-        denom_hash = hashlib.sha256(path.encode()).hexdigest().upper()
+    def ibc_denom(self, denom_hash, **kwargs):
         return json.loads(
             self.raw(
                 "q",
                 "ibc-transfer",
                 "denom",
                 denom_hash,
-                node=node,
-                output="json",
+                **(self.get_base_kwargs() | kwargs),
             )
-        )["denom"]
+        ).get("denom")
 
     def ibc_denom_hash(self, path, **kwargs):
         return json.loads(

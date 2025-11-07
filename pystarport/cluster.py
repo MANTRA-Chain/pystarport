@@ -797,11 +797,8 @@ class ClusterCLI:
             port_id, channel_id, packet_seq, **kwargs
         )
 
-    def ibc_denom_trace(self, path, node, i=0):
-        return self.cosmos_cli(i).ibc_denom_trace(path, node)
-
-    def ibc_denom(self, path, node, i=0):
-        return self.cosmos_cli(i).ibc_denom(path, node)
+    def ibc_denom(self, denom_hash, i=0, **kwargs):
+        return self.cosmos_cli(i).ibc_denom(denom_hash, **kwargs)
 
     def ibc_denom_hash(self, path, i=0, **kwargs):
         return self.cosmos_cli(i).ibc_denom_hash(path, **kwargs)
