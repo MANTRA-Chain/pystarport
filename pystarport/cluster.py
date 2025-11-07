@@ -812,6 +812,12 @@ class ClusterCLI:
     def query_grant(self, granter, grantee, i=0, **kwargs):
         return self.cosmos_cli(i).query_grant(granter, grantee, **kwargs)
 
+    def grant_fee_allowance(self, granter, grantee, i=0, **kwargs):
+        return self.cosmos_cli(i).grant_fee_allowance(granter, grantee, **kwargs)
+
+    def revoke_fee_grant(self, granter, grantee, i=0, **kwargs):
+        return self.cosmos_cli(i).revoke_fee_grant(granter, grantee, **kwargs)
+
     def tx_search(self, events, i=0, **kwargs):
         return self.cosmos_cli(i).tx_search(events, **kwargs)
 
