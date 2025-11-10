@@ -9,7 +9,6 @@ from itertools import takewhile
 from urllib.parse import urlparse
 
 from dateutil.parser import isoparse
-from web3 import AsyncWeb3
 
 
 class BondStatus(Enum):
@@ -26,6 +25,15 @@ class BondStatus(Enum):
             BondStatus.BONDED: 3,
         }
         return mapping[self]
+
+
+PRESERVE_UNDERSCORE_FLAGS = {
+    "order_by",
+    "log_format",
+    "log_level",
+    "log_no_color",
+    "verbose_log_level",
+}
 
 
 def interact(cmd, ignore_error=False, input=None, **kwargs):
@@ -62,22 +70,22 @@ def safe_cli_string(s):
 
 
 def build_cli_args_safe(*args, **kwargs):
-    args = [safe_cli_string(arg) for arg in args if arg]
+    return build_cli_args(*args, safe=True, **kwargs)
+
+
+def build_cli_args(*args, safe=False, **kwargs):
+    if safe:
+        args = [safe_cli_string(arg) for arg in args if arg]
+    else:
+        args = [arg for arg in args if arg is not None]
     for k, v in kwargs.items():
         if v is None:
             continue
-        args.append("--" + k.strip("_").replace("_", "-"))
-        args.append(safe_cli_string(v))
-    return list(map(str, args))
-
-
-def build_cli_args(*args, **kwargs):
-    args = [arg for arg in args if arg is not None]
-    for k, v in kwargs.items():
-        if v is None:
-            continue
-        args.append("--" + k.strip("_").replace("_", "-"))
-        args.append(v)
+        flag = "--" + (
+            k if k in PRESERVE_UNDERSCORE_FLAGS else k.strip("_").replace("_", "-")
+        )
+        args.append(flag)
+        args.append(safe_cli_string(v) if safe else v)
     return list(map(str, args))
 
 
@@ -238,14 +246,3 @@ def w3_wait_for_new_blocks(w3, n, sleep=0.5):
         cur_height = w3.eth.block_number
         if cur_height - begin_height >= n:
             break
-
-
-async def w3_wait_for_new_blocks_async(w3: AsyncWeb3, n: int, sleep=0.1):
-    begin_height = await w3.eth.block_number
-    target = begin_height + n
-
-    while True:
-        cur_height = await w3.eth.block_number
-        if cur_height >= target:
-            break
-        await asyncio.sleep(sleep)
