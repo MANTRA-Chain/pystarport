@@ -853,6 +853,9 @@ class ClusterCLI:
 
     def build_evm_tx(self, raw_tx: str, i=0, **kwargs):
         return self.cosmos_cli(i).build_evm_tx(raw_tx, **kwargs)
+    
+    def consensus_address(self, i=0):
+        return self.cosmos_cli(i).consensus_address()
 
 
 def start_cluster(data_dir):

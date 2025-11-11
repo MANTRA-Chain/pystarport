@@ -10,7 +10,5 @@ def test_build_cli_args():
     for safe in [False, True]:
         assert build_cli_args(safe=safe, order_by="desc") == ["--order_by", "desc"]
         assert build_cli_args(safe=safe, chain_id="12") == ["--chain-id", "12"]
-        res = build_cli_args(
-            "tx_search", safe=safe, order_by="desc", chain_id="12"
-        )
+        res = build_cli_args("tx_search", safe=safe, order_by="desc", chain_id="12")
         assert res == ["tx_search", "--order_by", "desc", "--chain-id", "12"]

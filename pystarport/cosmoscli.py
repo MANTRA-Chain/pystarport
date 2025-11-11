@@ -1718,3 +1718,7 @@ class CosmosCLI:
                 **(self.get_kwargs() | kwargs),
             )
         )
+
+    def consensus_address(self):
+        output = self.raw("comet", "show-address", home=self.data_dir)
+        return output.decode().strip()
