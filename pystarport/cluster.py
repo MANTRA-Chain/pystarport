@@ -853,7 +853,7 @@ class ClusterCLI:
 
     def build_evm_tx(self, raw_tx: str, i=0, **kwargs):
         return self.cosmos_cli(i).build_evm_tx(raw_tx, **kwargs)
-    
+
     def consensus_address(self, i=0):
         return self.cosmos_cli(i).consensus_address()
 
@@ -1043,8 +1043,9 @@ def init_devnet(
     for i, node in enumerate(config["validators"]):
         mnemonic = node.get("mnemonic")
         coin_type = node.get("coin-type")
+        account_name = node.get("name", "validator" if "staked" in node else "fullnode")
         account = cli.create_account(
-            "validator", i, mnemonic=mnemonic, coin_type=coin_type
+            account_name, i, mnemonic=mnemonic, coin_type=coin_type
         )
         if mnemonic:
             account["mnemonic"] = mnemonic
@@ -1081,7 +1082,7 @@ def init_devnet(
             if has_acct and has_seq:
                 gentx_extra_args.append("--offline")
             cli.gentx(
-                "validator",
+                account_name,
                 node["staked"],
                 *gentx_extra_args,
                 i=i,
