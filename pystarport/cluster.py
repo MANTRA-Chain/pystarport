@@ -1406,10 +1406,11 @@ def supervisord_ini(cmd, validators, chain_id, start_flags=""):
     ini = {}
     for i, node in enumerate(validators):
         directory = f"%(here)s/node{i}"
+        node_start_flags = node.get("start-flags", start_flags)
         ini[f"program:{chain_id}-node{i}"] = dict(
             COMMON_PROG_OPTIONS,
             directory=directory,
-            command=f"{cmd} start --home . {start_flags}",
+            command=f"{cmd} start --home . {node_start_flags}",
             stdout_logfile=f"{directory}.log",
         )
         app_cfg = node.get("app-config", {})
