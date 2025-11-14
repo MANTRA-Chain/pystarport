@@ -263,11 +263,17 @@ class ClusterCLI:
         section = f"program:{prgname}"
         ini.add_section(section)
         directory = f"%(here)s/node{i}"
+        start_flags = self.config.get("start-flags", "")
+        cmd_flags = self.config.get("cmd-flags", "")
+        combined_flags = " ".join([start_flags, cmd_flags]).strip()
+        command = f"{self.cmd} start --home ."
+        if combined_flags:
+            command = f"{command} {combined_flags}"
         ini[section].update(
             dict(
                 COMMON_PROG_OPTIONS,
                 directory=directory,
-                command=f"{self.cmd} start --home .",
+                command=command,
                 autostart="false",
                 stdout_logfile=f"{directory}.log",
             )
@@ -1150,9 +1156,8 @@ def init_devnet(
         cli.validate_genesis(config.get("cmd-flags", {}))
 
     # write supervisord config file
-    start_flags = " ".join(
-        [config.get("start-flags", ""), config.get("cmd-flags", "")]
-    ).strip()
+    start_flags = config.get("start-flags", "")
+    cmd_flags = config.get("cmd-flags", "")
     with (data_dir / SUPERVISOR_CONFIG_FILE).open("w") as fp:
         write_ini(
             fp,
@@ -1161,6 +1166,7 @@ def init_devnet(
                 config["validators"],
                 chain_id,
                 start_flags=start_flags,
+                cmd_flags=cmd_flags,
             ),
         )
 
@@ -1402,14 +1408,16 @@ def find_account(data_dir, chain_id, name):
     return next(acct for acct in accounts if acct["name"] == name)
 
 
-def supervisord_ini(cmd, validators, chain_id, start_flags=""):
+def supervisord_ini(cmd, validators, chain_id, start_flags="", cmd_flags=""):
     ini = {}
     for i, node in enumerate(validators):
         directory = f"%(here)s/node{i}"
+        node_start_flags = node.get("start-flags", start_flags)
+        combined_flags = " ".join([node_start_flags, cmd_flags]).strip()
         ini[f"program:{chain_id}-node{i}"] = dict(
             COMMON_PROG_OPTIONS,
             directory=directory,
-            command=f"{cmd} start --home . {start_flags}",
+            command=f"{cmd} start --home . {combined_flags}",
             stdout_logfile=f"{directory}.log",
         )
         app_cfg = node.get("app-config", {})
