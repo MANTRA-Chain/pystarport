@@ -1445,6 +1445,11 @@ def supervisord_ini(cmd, validators, chain_id, start_flags="", cmd_flags=""):
 
 def supervisord_ini_group(chain_ids, is_hermes):
     directory = "%(here)s"
+    data_dir_hash = hashlib.md5(
+        os.path.abspath(directory.replace("%(here)s", ".")).encode()
+    ).hexdigest()[:8]
+    socket_path = f"/tmp/supervisor-{data_dir_hash}.sock"
+
     cfg = {
         "include": {
             "files": " ".join(
@@ -1462,8 +1467,8 @@ def supervisord_ini_group(chain_ids, is_hermes):
             "supervisor.rpcinterface_factory": "supervisor.rpcinterface:"
             "make_main_rpcinterface",
         },
-        "unix_http_server": {"file": f"{directory}/supervisor.sock"},
-        "supervisorctl": {"serverurl": f"unix://{directory}/supervisor.sock"},
+        "unix_http_server": {"file": socket_path},
+        "supervisorctl": {"serverurl": f"unix://{socket_path}"},
     }
     command = "hermes --config relayer.toml start"
     if not is_hermes:
