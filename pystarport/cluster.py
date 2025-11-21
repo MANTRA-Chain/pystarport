@@ -863,6 +863,9 @@ class ClusterCLI:
     def consensus_address(self, i=0):
         return self.cosmos_cli(i).consensus_address()
 
+    def total_supply_of(self, denom: str, i=0, **kwargs):
+        return self.cosmos_cli(i).total_supply_of(denom, **kwargs)
+
 
 def start_cluster(data_dir):
     cmd = [

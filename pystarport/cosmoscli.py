@@ -1722,3 +1722,14 @@ class CosmosCLI:
     def consensus_address(self):
         output = self.raw("comet", "show-address", home=self.data_dir)
         return output.decode().strip()
+
+    def total_supply_of(self, denom, **kwargs):
+        return json.loads(
+            self.raw(
+                "q",
+                "bank",
+                "total-supply-of",
+                denom,
+                **(self.get_base_kwargs() | kwargs),
+            )
+        ).get("amount")
