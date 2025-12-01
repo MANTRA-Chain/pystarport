@@ -1421,6 +1421,7 @@ def supervisord_ini(cmd, validators, chain_id, start_flags="", cmd_flags=""):
             COMMON_PROG_OPTIONS,
             directory=directory,
             command=f"{cmd} start --home . {combined_flags}",
+            autostart=node.get("autostart", "true"),
             stdout_logfile=f"{directory}.log",
         )
         app_cfg = node.get("app-config", {})
