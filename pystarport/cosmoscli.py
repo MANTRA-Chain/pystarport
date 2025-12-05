@@ -6,6 +6,7 @@ import tempfile
 
 import bech32
 import durations
+import requests
 from dateutil.parser import isoparse
 
 from .app import CHAIN
@@ -1291,14 +1292,23 @@ class CosmosCLI:
         return rsp
 
     def event_query_tx_for(self, hash, **kwargs):
-        return json.loads(
-            self.raw(
-                "q",
-                "event-query-tx-for",
-                hash,
-                **(self.get_base_kwargs() | kwargs),
-            )
-        )
+        try:
+            base_kwargs = self.get_base_kwargs() | kwargs
+            return json.loads(self.raw("q", "event-query-tx-for", hash, **base_kwargs))
+        except (AssertionError, subprocess.TimeoutExpired) as e:
+            if "timeout" not in str(e).lower():
+                raise
+            node_rpc = self.node_rpc.replace("tcp://", "http://", 1)
+            rsp = requests.get(f"{node_rpc}/tx", params={"hash": f"0x{hash}"})
+            if not rsp.ok:
+                raise requests.HTTPError(rsp)
+            res = rsp.json()["result"]
+            data = res["tx_result"]
+            data["code"] = 0
+            data["raw_log"] = ""
+            data["txhash"] = res["hash"]
+            data["height"] = res["height"]
+            return data
 
     def migrate_keystore(self):
         return self.raw("keys", "migrate", home=self.data_dir)
