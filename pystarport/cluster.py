@@ -389,6 +389,9 @@ class ClusterCLI:
     def distribution_rewards(self, delegator_addr, i=0, **kwargs):
         return self.cosmos_cli(i).distribution_rewards(delegator_addr, **kwargs)
 
+    def distribution_withdraw_address(self, i=0, **kwargs):
+        return self.cosmos_cli(i).distribution_withdraw_address(**kwargs)
+
     def address(self, name, i=0, bech="acc"):
         return self.cosmos_cli(i).address(name, bech)
 

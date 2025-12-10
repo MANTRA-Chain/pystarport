@@ -400,6 +400,17 @@ class CosmosCLI:
             return 0
         return parse_amount(total[0])
 
+    def distribution_withdraw_address(self, **kwargs):
+        res = json.loads(
+            self.raw(
+                "q",
+                "distribution",
+                "delegator-withdraw-address",
+                **(self.get_base_kwargs() | kwargs),
+            )
+        )
+        return res.get("withdraw_address")
+
     def address(self, name, bech="acc"):
         output = self.raw(
             "keys",
