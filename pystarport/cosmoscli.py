@@ -1307,6 +1307,7 @@ class CosmosCLI:
             base_kwargs = self.get_base_kwargs() | kwargs
             return json.loads(self.raw("q", "event-query-tx-for", hash, **base_kwargs))
         except (AssertionError, subprocess.TimeoutExpired) as e:
+            print(f"error when query tx {hash}, try fallback: {e}")
             if "timeout" not in str(e).lower():
                 raise
             node_rpc = self.node_rpc.replace("tcp://", "http://", 1)
