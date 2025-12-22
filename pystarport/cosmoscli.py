@@ -3,6 +3,7 @@ import hashlib
 import json
 import subprocess
 import tempfile
+import time
 
 import bech32
 import durations
@@ -1308,19 +1309,33 @@ class CosmosCLI:
             return json.loads(self.raw("q", "event-query-tx-for", hash, **base_kwargs))
         except (AssertionError, subprocess.TimeoutExpired) as e:
             print(f"error when query tx {hash}, try fallback: {e}")
-            if "timeout" not in str(e).lower():
+            if "timeout" not in str(e).lower() and "timed out" not in str(e).lower():
                 raise
-            node_rpc = self.node_rpc.replace("tcp://", "http://", 1)
-            rsp = requests.get(f"{node_rpc}/tx", params={"hash": f"0x{hash}"})
-            if not rsp.ok:
-                raise requests.HTTPError(rsp)
-            res = rsp.json()["result"]
-            data = res["tx_result"]
-            data["code"] = 0
-            data["raw_log"] = ""
-            data["txhash"] = res["hash"]
-            data["height"] = res["height"]
-            return data
+        node_rpc = self.node_rpc.replace("tcp://", "http://", 1)
+        rsp = None
+        for attempt in range(3):
+            try:
+                rsp = requests.get(f"{node_rpc}/tx", params={"hash": f"0x{hash}"})
+                if rsp.ok:
+                    break
+                print(f"attempt {attempt + 1}/3 got status code: {rsp.status_code}")
+            except Exception as e:
+                print(f"attempt {attempt + 1}/3 failed: {e}")
+            if attempt < 2:
+                time.sleep(1)
+
+        if not rsp or not rsp.ok:
+            raise requests.HTTPError(rsp if rsp else "all retry attempts failed")
+
+        res = rsp.json()["result"]
+        tx_res = res["tx_result"]
+        return {
+            **tx_res,
+            "code": 0,
+            "raw_log": "",
+            "txhash": res["hash"],
+            "height": res["height"],
+        }
 
     def migrate_keystore(self):
         return self.raw("keys", "migrate", home=self.data_dir)
