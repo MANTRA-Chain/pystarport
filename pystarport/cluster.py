@@ -474,6 +474,12 @@ class ClusterCLI:
     def delegations(self, del_addr, i=0, **kwargs):
         return self.cosmos_cli(i).delegations(del_addr, **kwargs)
 
+    def undelegation(self, del_addr, val_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).undelegation(del_addr, val_addr, **kwargs)
+
+    def undelegations(self, del_addr, i=0, **kwargs):
+        return self.cosmos_cli(i).undelegations(del_addr, **kwargs)
+
     def delegate_amount(self, to_addr, amt, i=0, **kwargs):
         return self.cosmos_cli(i).delegate_amount(to_addr, amt, **kwargs)
 

@@ -566,6 +566,36 @@ class CosmosCLI:
         )
         return res.get("delegation_responses") or res
 
+    def undelegation(self, del_addr, val_addr, **kwargs):
+        try:
+            res = json.loads(
+                self.raw(
+                    "q",
+                    "staking",
+                    "unbonding-delegation",
+                    del_addr,
+                    val_addr,
+                    **(self.get_base_kwargs() | kwargs),
+                )
+            )
+            return res.get("unbond") or res
+        except AssertionError as e:
+            if "unbonding delegation" in str(e) and "not found" in str(e):
+                return {"balance": {"amount": 0}}
+            raise
+
+    def undelegations(self, del_addr, **kwargs):
+        res = json.loads(
+            self.raw(
+                "q",
+                "staking",
+                "unbonding-delegations",
+                del_addr,
+                **(self.get_base_kwargs() | kwargs),
+            )
+        )
+        return res.get("unbonding_responses") or res
+
     def delegate_amount(self, to_addr, amt, **kwargs):
         rsp = json.loads(
             self.raw(
