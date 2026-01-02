@@ -137,14 +137,14 @@ async def wait_for_fn_async(name, fn, *, timeout=120, interval=1):
         raise TimeoutError(f"wait for {name} timeout")
 
 
-def wait_for_block_time(cli, t):
+def wait_for_block_time(cli, t, sleep=0.1):
     print("wait for block time", t)
     while True:
         now = isoparse(get_sync_info(cli.status())["latest_block_time"])
         print("block time now:", now)
         if now >= t:
             break
-        time.sleep(0.5)
+        time.sleep(sleep)
 
 
 def w3_wait_for_block(w3, height, timeout=120):
