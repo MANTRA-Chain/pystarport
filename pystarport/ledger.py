@@ -10,7 +10,7 @@ import grpc
 
 from .ledger_utils import ZEMU_API_PORT, ZEMU_BUTTON_PORT, ZEMU_GRPC_SERVER_PORT
 
-ZEMU_IMAGE = "zondax/builder-zemu:speculos-261ece66796d4e8e15d944a5ab7ee35246eb8599"
+ZEMU_IMAGE = "zondax/builder-zemu:speculos-ef9610662dc90a1eeddba7c991e3ef7c53c4e258"
 
 
 class Ledger:
