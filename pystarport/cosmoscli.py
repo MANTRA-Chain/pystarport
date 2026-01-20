@@ -1800,3 +1800,12 @@ class CosmosCLI:
                 **(self.get_base_kwargs() | kwargs),
             )
         ).get("amount")
+
+    def block(self, **kwargs):
+        return json.loads(
+            self.raw(
+                "q",
+                "block",
+                **(self.get_base_kwargs() | kwargs),
+            )
+        )

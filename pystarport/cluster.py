@@ -875,6 +875,9 @@ class ClusterCLI:
     def total_supply_of(self, denom: str, i=0, **kwargs):
         return self.cosmos_cli(i).total_supply_of(denom, **kwargs)
 
+    def block(self, i=0, **kwargs):
+        return self.cosmos_cli(i).block(**kwargs)
+
 
 def start_cluster(data_dir):
     cmd = [
