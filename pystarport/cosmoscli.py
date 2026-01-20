@@ -801,7 +801,7 @@ class CosmosCLI:
             self.raw("tx", "broadcast", tx_file, node=self.node_rpc, **kwargs)
         )
         if rsp.get("code") == 0:
-            rsp = self.event_query_tx_for(rsp["txhash"], **kwargs)
+            rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
     def broadcast_tx_json(self, tx, **kwargs):
