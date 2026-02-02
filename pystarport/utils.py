@@ -113,6 +113,14 @@ def parse_amount(coin):
         return float("".join(takewhile(is_float, coin)))
 
 
+def parse_denom(coin):
+    if isinstance(coin, dict):
+        return coin["denom"]
+    s = str(coin)
+    prefix = "".join(takewhile(is_float, s))
+    return s[len(prefix) :]
+
+
 def is_float(s):
     return str.isdigit(s) or s == "."
 
