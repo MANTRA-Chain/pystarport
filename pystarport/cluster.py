@@ -764,6 +764,9 @@ class ClusterCLI:
     def ibc_query_channels(self, connid, i=0, **kwargs):
         return self.cosmos_cli(i).ibc_query_channels(connid, **kwargs)
 
+    def ibc_query_all_channels(self, i=0, **kwargs):
+        return self.cosmos_cli(i).ibc_query_all_channels(**kwargs)
+
     def ibc_query_channel(self, port_id, channel_id, i=0, **kwargs):
         return self.cosmos_cli(i).ibc_query_channel(port_id, channel_id, **kwargs)
 

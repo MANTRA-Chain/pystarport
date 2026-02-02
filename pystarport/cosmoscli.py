@@ -1375,7 +1375,7 @@ class CosmosCLI:
             "node": self.node_rpc,
             "output": "json",
         }
-        return json.loads(
+        res = json.loads(
             self.raw(
                 "q",
                 "ibc",
@@ -1385,6 +1385,23 @@ class CosmosCLI:
                 **(default_kwargs | kwargs),
             )
         )
+        return res.get("channels", [])
+
+    def ibc_query_all_channels(self, **kwargs):
+        default_kwargs = {
+            "node": self.node_rpc,
+            "output": "json",
+        }
+        res = json.loads(
+            self.raw(
+                "q",
+                "ibc",
+                "channel",
+                "channels",
+                **(default_kwargs | kwargs),
+            )
+        )
+        return res.get("channels", [])
 
     def ibc_query_channel(self, port_id, channel_id, **kwargs):
         default_kwargs = {
