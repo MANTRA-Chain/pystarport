@@ -615,16 +615,18 @@ class ClusterCLI:
             **kwargs,
         )
 
-    def gov_deposit(
-        self, depositor, proposal_id, amount, i=0, event_query_tx=True, **kwargs
-    ):
-        return self.cosmos_cli(i).gov_deposit(
-            depositor,
+    def gov_weighted_vote(self, proposal_id, options, i=0, **kwargs):
+        return self.cosmos_cli(i).gov_weighted_vote(
             proposal_id,
-            amount,
-            event_query_tx=event_query_tx,
+            options,
             **kwargs,
         )
+
+    def gov_deposit(self, proposal_id, amount, i=0, **kwargs):
+        return self.cosmos_cli(i).gov_deposit(proposal_id, amount, **kwargs)
+
+    def gov_cancel_proposal(self, proposal_id, i=0, **kwargs):
+        return self.cosmos_cli(i).gov_cancel_proposal(proposal_id, **kwargs)
 
     def submit_gov_proposal(self, proposal, i=0, **kwargs):
         return self.cosmos_cli(i).submit_gov_proposal(proposal, **kwargs)
@@ -637,6 +639,12 @@ class ClusterCLI:
 
     def query_tally(self, proposal_id, i=0, **kwargs):
         return self.cosmos_cli(i).query_tally(proposal_id, **kwargs)
+
+    def query_vote(self, proposal_id, voter, i=0, **kwargs):
+        return self.cosmos_cli(i).query_vote(proposal_id, voter, **kwargs)
+
+    def query_gov_deposit(self, proposal_id, depositor, i=0, **kwargs):
+        return self.cosmos_cli(i).query_gov_deposit(proposal_id, depositor, **kwargs)
 
     def ibc_transfer(self, to, amount, src_channel, i=0, **kwargs):
         return self.cosmos_cli(i).ibc_transfer(to, amount, src_channel, **kwargs)

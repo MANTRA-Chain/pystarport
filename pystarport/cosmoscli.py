@@ -1038,9 +1038,23 @@ class CosmosCLI:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
-    def gov_deposit(
-        self, depositor, proposal_id, amount, event_query_tx=True, **kwargs
-    ):
+    def gov_weighted_vote(self, proposal_id, options, **kwargs):
+        rsp = json.loads(
+            self.raw(
+                "tx",
+                "gov",
+                "weighted-vote",
+                proposal_id,
+                options,
+                "-y",
+                **(self.get_kwargs_with_gas() | kwargs),
+            )
+        )
+        if rsp.get("code") == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp
+
+    def gov_deposit(self, proposal_id, amount, **kwargs):
         rsp = json.loads(
             self.raw(
                 "tx",
@@ -1049,15 +1063,25 @@ class CosmosCLI:
                 proposal_id,
                 amount,
                 "-y",
-                from_=depositor,
-                home=self.data_dir,
-                node=self.node_rpc,
-                keyring_backend="test",
-                chain_id=self.chain_id,
-                **kwargs,
+                **(self.get_kwargs_with_gas() | kwargs),
             )
         )
-        if rsp["code"] == 0 and event_query_tx:
+        if rsp.get("code") == 0:
+            rsp = self.event_query_tx_for(rsp["txhash"])
+        return rsp
+
+    def gov_cancel_proposal(self, proposal_id, **kwargs):
+        rsp = json.loads(
+            self.raw(
+                "tx",
+                "gov",
+                "cancel-proposal",
+                proposal_id,
+                "-y",
+                **(self.get_kwargs_with_gas() | kwargs),
+            )
+        )
+        if rsp.get("code") == 0:
             rsp = self.event_query_tx_for(rsp["txhash"])
         return rsp
 
@@ -1111,6 +1135,32 @@ class CosmosCLI:
             )
         )
         return res.get("tally") or res
+
+    def query_vote(self, proposal_id, voter, **kwargs):
+        res = json.loads(
+            self.raw(
+                "q",
+                "gov",
+                "vote",
+                proposal_id,
+                voter,
+                **(self.get_base_kwargs() | kwargs),
+            )
+        )
+        return res.get("vote") or res
+
+    def query_gov_deposit(self, proposal_id, depositor, **kwargs):
+        res = json.loads(
+            self.raw(
+                "q",
+                "gov",
+                "deposit",
+                proposal_id,
+                depositor,
+                **(self.get_base_kwargs() | kwargs),
+            )
+        )
+        return res.get("deposit") or res
 
     def ibc_transfer(self, to, amount, src_channel, **kwargs):
         rsp = json.loads(
