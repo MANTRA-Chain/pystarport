@@ -84,6 +84,12 @@ def build_cli_args(*args, safe=False, **kwargs):
         flag = "--" + (
             k if k in PRESERVE_UNDERSCORE_FLAGS else k.strip("_").replace("_", "-")
         )
+        if v is True:
+            args.append(flag)
+            continue
+        if v is False:
+            args.append(f"{flag}=false")
+            continue
         args.append(flag)
         args.append(safe_cli_string(v) if safe else v)
     return list(map(str, args))
