@@ -1411,8 +1411,8 @@ class CosmosCLI:
         tx_res = res["tx_result"]
         return {
             **tx_res,
-            "code": 0,
-            "raw_log": "",
+            "code": tx_res.get("code", 0),
+            "raw_log": tx_res.get("log", ""),
             "txhash": res["hash"],
             "height": res["height"],
         }
