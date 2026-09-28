@@ -27,7 +27,7 @@ def ensure_deps_installed():
 
         grpc_available = True
     except ImportError:
-        success, error = install_package(["grpcio", "grpcio-tools"])
+        success, error = install_package(["grpcio"])
         if success:
             import grpc  # noqa: F401
 
@@ -124,6 +124,10 @@ def add_ZemuCommandServicer_to_server(servicer, server):
     server.add_generic_rpc_handlers([service])
 
 
+# speculos.py in the Zemu image and in the upstream Speculos one
+SPECULOS_PATHS = ["/home/zondax/speculos/speculos.py", "/speculos/speculos.py"]
+
+
 def start_speculos():
     ledger_binary = f"/tmp/{os.getenv('LEDGER_BINARY', 'app_cosmos.elf')}"
     if not os.path.exists(ledger_binary):
@@ -132,8 +136,9 @@ def start_speculos():
 
     ledger_model = os.getenv("LEDGER_MODEL", "nanos")
     ledger_seed = os.getenv("LEDGER_SEED")
+    speculos = next((p for p in SPECULOS_PATHS if os.path.exists(p)), SPECULOS_PATHS[0])
     speculos_cmd = [
-        "/home/zondax/speculos/speculos.py",
+        speculos,
         "--model",
         ledger_model,
         ledger_binary,

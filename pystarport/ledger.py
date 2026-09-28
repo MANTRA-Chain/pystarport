@@ -11,23 +11,29 @@ import grpc
 from .ledger_utils import ZEMU_API_PORT, ZEMU_BUTTON_PORT, ZEMU_GRPC_SERVER_PORT
 
 ZEMU_IMAGE = "zondax/builder-zemu:speculos-ef9610662dc90a1eeddba7c991e3ef7c53c4e258"
+# runs apps for newer API levels like app_evm.elf, but not Nano S apps like
+# app_cosmos.elf
+SPECULOS_IMAGE = "ghcr.io/ledgerhq/speculos:v0.27.0"
 
 
 class Ledger:
-    def __init__(self, elf_file="app_cosmos.elf", model="nanos", seed=None):
+    def __init__(
+        self, elf_file="app_cosmos.elf", model="nanos", seed=None, image=ZEMU_IMAGE
+    ):
         self.name = f"ledger_simulator_{uuid.uuid4().hex[:8]}"
         self.client = docker.from_env()
         self.elf_file = elf_file
         self.model = model
         self.seed = seed
+        self.image = image
         self.container = None
 
     def _pull_image(self):
         try:
-            self.client.images.get(ZEMU_IMAGE)
+            self.client.images.get(self.image)
         except docker.errors.ImageNotFound:
-            print(f"Pulling image {ZEMU_IMAGE}")
-            self.client.images.pull(ZEMU_IMAGE)
+            print(f"Pulling image {self.image}")
+            self.client.images.pull(self.image)
 
     def _cleanup(self):
         try:
@@ -68,7 +74,7 @@ class Ledger:
             raise RuntimeError(f"Required files missing: {required_files}")
 
         self.container = self.client.containers.create(
-            image=ZEMU_IMAGE,
+            image=self.image,
             command=["python3", "/tmp/entrypoint.py"],
             name=self.name,
             ports={
