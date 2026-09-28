@@ -67,7 +67,10 @@ from ledger_utils import (  # noqa: E402
     ZEMU_GRPC_SERVER_PORT,
     LedgerAPDU,
     LedgerButton,
+    LedgerScreen,
     cosmos_address_automation,
+    eip712_automation,
+    enable_blind_signing,
     ethereum_transaction_automation,
 )
 
@@ -176,6 +179,8 @@ def start_speculos():
 class SpeculosGRPCBridge:
     def __init__(self):
         self.apdu_client = LedgerAPDU(ZEMU_API_PORT)
+        self.screen = LedgerScreen(ZEMU_API_PORT)
+        self.blind_signing = False
         self._test_speculos_connection()
 
     def _test_speculos_connection(self):
@@ -207,6 +212,8 @@ class SpeculosGRPCBridge:
                         return self._handle_eth_address_request(cmd)
                     elif ins == 0x04:
                         return self._handle_eth_transaction_signing(cmd)
+                    elif ins == 0x0C:
+                        return self._handle_eth_eip712_signing(cmd)
                 elif cla == 0x55:
                     if ins == 0x04:
                         return self._handle_cosmos_address_request(cmd)
@@ -262,6 +269,21 @@ class SpeculosGRPCBridge:
 
         def automation(apdu_complete):
             ethereum_transaction_automation(btn_client, apdu_complete)
+
+        response_bytes = self.apdu_client.send_apdu_with_automation(
+            cmd.hex(), automation, timeout=100
+        )
+
+        return ExchangeReply(reply=response_bytes)
+
+    def _handle_eth_eip712_signing(self, cmd):
+        # the Ethereum app refuses to sign EIP-712 hashes without blind signing
+        if not self.blind_signing:
+            enable_blind_signing(self.screen)
+            self.blind_signing = True
+
+        def automation(apdu_complete):
+            eip712_automation(self.screen, apdu_complete)
 
         response_bytes = self.apdu_client.send_apdu_with_automation(
             cmd.hex(), automation, timeout=100
