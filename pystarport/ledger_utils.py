@@ -182,6 +182,57 @@ def ethereum_transaction_automation(btn_client, apdu_complete):
         pass
 
 
+class LedgerScreen:
+    """Reads and drives the Speculos screen through its REST API."""
+
+    def __init__(self, api_port=ZEMU_API_PORT):
+        self.api_url = f"http://127.0.0.1:{api_port}"
+
+    def text(self):
+        rsp = requests.get(f"{self.api_url}/events?currentscreenonly=true", timeout=5)
+        return " ".join(event["text"] for event in rsp.json()["events"])
+
+    def press(self, button):
+        requests.post(
+            f"{self.api_url}/button/{button}",
+            json={"action": "press-and-release"},
+            timeout=5,
+        )
+        time.sleep(0.5)
+
+    def press_until(self, button, done, timeout=30):
+        deadline = time.time() + timeout
+        while not done(self.text()):
+            if time.time() > deadline:
+                raise TimeoutError(f"stuck on Ledger screen: {self.text()}")
+            self.press(button)
+
+
+def enable_blind_signing(screen):
+    """Turn on the Ethereum app setting needed to sign EIP-712 hashes."""
+    screen.press_until("right", lambda text: "App settings" in text)
+    screen.press("both")
+    screen.press_until("right", lambda text: "Blind signing" in text)
+    if "Enabled" not in screen.text():
+        screen.press("both")
+    screen.press_until("right", lambda text: text.strip() == "Back")
+    screen.press("both")
+    screen.press_until("left", lambda text: "is ready" in text)
+
+
+def eip712_automation(screen, apdu_complete, timeout=60):
+    """Accept the blind signing warning, page through the hashes and sign."""
+    deadline = time.time() + timeout
+    while not apdu_complete.is_set() and time.time() < deadline:
+        text = screen.text()
+        if "Blind signing ahead" in text or "Sign message" in text:
+            screen.press("both")
+        elif "Review typed" in text or "hash" in text:
+            screen.press("right")
+        else:
+            time.sleep(0.5)
+
+
 def cosmos_address_automation(btn_client, apdu_complete):
     try:
         time.sleep(3)
